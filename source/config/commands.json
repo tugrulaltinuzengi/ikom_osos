@@ -1,0 +1,15 @@
+{
+  "comment": "Digit -> command mapping. Single source of truth, loaded by verifier.py (authoritative) and served to the phone via GET /api/hmi-config. scope 'gateway' = full verify round-trip via osos/{gw}/cmd; scope 'local' = executed instantly on the phone from the JS prediction (misread is harmless), drawing still published with local:true for phase-2 data collection.",
+  "digits": {
+    "0": { "scope": "gateway", "action": "ping",         "args": {},               "label": "ping gateway" },
+    "1": { "scope": "gateway", "action": "read_now",     "args": {},               "label": "read now" },
+    "2": { "scope": "gateway", "action": "set_interval", "args": { "seconds": 2 }, "label": "fast reporting (2 s)" },
+    "3": { "scope": "gateway", "action": "set_interval", "args": { "seconds": 10 },"label": "normal reporting (10 s)" },
+    "4": { "scope": "local",   "action": "view",         "args": { "page": "L1" }, "label": "show L1" },
+    "5": { "scope": "local",   "action": "view",         "args": { "page": "L2" }, "label": "show L2" },
+    "6": { "scope": "local",   "action": "view",         "args": { "page": "L3" }, "label": "show L3" },
+    "7": { "scope": "local",   "action": "view",         "args": { "page": "overview" }, "label": "overview" },
+    "8": { "scope": "local",   "action": "view",         "args": { "page": "power" },    "label": "power factors" },
+    "9": { "scope": "none",    "action": "unassigned",   "args": {},               "label": "reserved (phase-2 symbols)" }
+  }
+}

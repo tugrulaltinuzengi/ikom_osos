@@ -1,0 +1,7 @@
+# 8 MB flash layout. If your S3 module is 4 MB, shrink factory to 0x1F0000
+# and www to 0x180000.
+# Name,    Type, SubType, Offset,  Size
+nvs,       data, nvs,     0x9000,  0x6000
+phy_init,  data, phy,     0xf000,  0x1000
+factory,   app,  factory, 0x10000, 0x300000
+www,       data, spiffs,  ,        0x200000

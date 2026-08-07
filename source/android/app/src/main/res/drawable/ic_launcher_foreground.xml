@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive-icon foreground: a round meter dial + needle (monitoring) over
+     the app's dark theme background. Content stays inside the 72x72 safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- dial ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#4FC3F7"
+        android:strokeWidth="4"
+        android:pathData="M24,54 a30,30 0 1,0 60,0 a30,30 0 1,0 -60,0" />
+
+    <!-- top tick -->
+    <path
+        android:strokeColor="#2E7C93"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M54,28 l0,6" />
+    <!-- lower-left tick -->
+    <path
+        android:strokeColor="#2E7C93"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M33.4,73.6 l4.3,-4.3" />
+    <!-- lower-right tick -->
+    <path
+        android:strokeColor="#2E7C93"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M74.6,73.6 l-4.3,-4.3" />
+
+    <!-- needle -->
+    <path
+        android:strokeColor="#80CBC4"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M54,54 L71,40" />
+
+    <!-- hub -->
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M49,54 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+</vector>

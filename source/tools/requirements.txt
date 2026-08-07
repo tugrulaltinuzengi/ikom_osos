@@ -1,0 +1,5 @@
+# PC-side development tools only -- nothing here runs at "runtime"
+# (runtime = ESP32-S3 + cloud broker + phone).
+paho-mqtt>=2.1
+python-dotenv>=1.0
+pytest>=8.0

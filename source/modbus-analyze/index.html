@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DKM-440 Live Reader</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2326313d'/%3E%3Cpolyline points='2,10 5,5 8,11 11,4 14,9' fill='none' stroke='%23cf951b' stroke-width='1.4'/%3E%3C/svg%3E">
+
+<style>
+  :root{
+    --chassis:#c9ced6;      /* instrument body */
+    --bar:#26313d;          /* top bar slate */
+    --bar-ink:#dfe6ee;
+    --panel:#ffffff;        /* MATLAB figure white */
+    --grid:#e7eaef;
+    --box:#9aa2ad;          /* axis box */
+    --ink:#1b2430;
+    --muted:#6b7481;
+    --L1:#d13b32; --L2:#cf951b; --L3:#2f6fb0; --N:#7b8593; --TOT:#3a4650;
+    --led-off:#c0392b; --led-on:#31c06a;
+    --mono:"Cascadia Code","JetBrains Mono",Consolas,"DejaVu Sans Mono",monospace;
+    --sans:"Segoe UI",system-ui,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{font-family:var(--sans);color:var(--ink);
+       background:
+         repeating-linear-gradient(90deg,transparent 0 3px,rgba(0,0,0,.012) 3px 4px),
+         var(--chassis);}
+
+  /* ---- instrument top bar ---- */
+  header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:20px;
+         padding:10px 18px;background:var(--bar);color:var(--bar-ink);
+         border-bottom:2px solid #12181f;box-shadow:0 2px 6px rgba(0,0,0,.25);}
+  .brand{display:flex;align-items:baseline;gap:10px;}
+  .brand b{font-size:16px;letter-spacing:.14em;font-weight:700;}
+  .brand span{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#93a1b1;}
+  .meta{font-family:var(--mono);font-size:11px;color:#9fb0c1;letter-spacing:.04em;}
+  .grow{flex:1;}
+  .stat{display:flex;align-items:center;gap:7px;font-size:12px;letter-spacing:.03em;}
+  .led{width:9px;height:9px;border-radius:50%;background:var(--led-off);
+       box-shadow:0 0 0 0 rgba(49,192,106,0);}
+  .led.on{background:var(--led-on);animation:pulse 1.8s ease-out infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(49,192,106,.5);}100%{box-shadow:0 0 0 7px rgba(49,192,106,0);}}
+  .clock{font-family:var(--mono);font-size:12px;color:#c4d2df;letter-spacing:.05em;}
+  header .ctl{font:12px var(--sans);color:var(--bar-ink);background:#33404e;
+              border:1px solid #435264;border-radius:5px;padding:4px 10px;cursor:pointer;}
+  header .ctl:hover{background:#3d4c5c;}
+  header select.ctl{padding:4px 6px;}
+  header .ctl:focus-visible,.led:focus-visible{outline:2px solid #7fb2ff;outline-offset:2px;}
+
+  main{padding:16px 18px 40px;max-width:1500px;margin:0 auto;}
+
+  /* ---- measurement section ---- */
+  section{margin:0 0 22px;}
+  .eyebrow{display:flex;align-items:center;gap:12px;margin:4px 2px 10px;}
+  .eyebrow h2{font-size:12px;letter-spacing:.2em;font-weight:700;color:#2f3a47;margin:0;
+              text-transform:uppercase;}
+  .eyebrow .rule{flex:1;height:1px;background:linear-gradient(90deg,#8a929d,transparent);}
+  .eyebrow .count{font-family:var(--mono);font-size:11px;color:var(--muted);}
+
+  .row{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));}
+
+  /* ---- plot panel ---- */
+  .panel{background:var(--panel);border:1px solid #b7bec8;border-radius:7px;
+         padding:8px 9px 6px;box-shadow:0 1px 2px rgba(0,0,0,.10);}
+  .cap{display:flex;align-items:center;gap:8px;margin:0 2px 6px;}
+  .chip{font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;
+        padding:1px 6px;border-radius:3px;letter-spacing:.03em;}
+  .cap .nm{font-size:11px;color:#465162;letter-spacing:.02em;font-weight:600;
+           white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cap .rd{margin-left:auto;font-family:var(--mono);font-size:14px;font-weight:700;
+           font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .cap .rd.na{color:var(--led-off)!important;}
+  canvas{width:100%;height:132px;display:block;}
+
+  @media (max-width:520px){.meta,.clock{display:none;}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><b>DKM&#8209;440</b><span>3&#8209;phase power analyzer</span></div>
+  <div class="meta" id="meta">&mdash;</div>
+  <div class="grow"></div>
+  <div class="clock" id="clock">--:--:--</div>
+  <div class="stat"><span class="led" id="led"></span><span id="stxt">connecting&hellip;</span></div>
+  <label class="stat">rate
+    <select id="rate" class="ctl">
+      <option value="500">0.5 s</option>
+      <option value="1000" selected>1 s</option>
+      <option value="2000">2 s</option>
+    </select>
+  </label>
+  <button id="pause" class="ctl">Pause</button>
+  <button id="clear" class="ctl">Clear</button>
+</header>
+
+<main id="main"></main>
+
+<script>
+const MAXPTS = 160;
+const PHASE_COLOR = { L1:'#d13b32', L2:'#cf951b', L3:'#2f6fb0', N:'#7b8593', TOT:'#3a4650', X:'#3a4650' };
+const PHASE_LABEL = { L1:'L1', L2:'L2', L3:'L3', N:'N', TOT:'Σ', X:'—' };
+// Section order + bilingual eyebrow (EN + the analyzer's own Turkish terms).
+const GROUPS = [
+  ['Supply',       'SUPPLY · BESLEME'],
+  ['Voltage',      'VOLTAGE · GERİLİM'],
+  ['Current',      'CURRENT · AKIM'],
+  ['Frequency',    'FREQUENCY · FREKANS'],
+  ['Power factor', 'POWER FACTOR · GÜÇ FAKTÖRÜ'],
+  ['cos',          'COS φ'],
+  ['tan',          'TAN φ'],
+];
+
+function phaseOf(k){
+  if(/_L1$/.test(k))return'L1'; if(/_L2$/.test(k))return'L2'; if(/_L3$/.test(k))return'L3';
+  if(/_N$/.test(k))return'N';   if(/_Tot$/.test(k))return'TOT'; return'X';
+}
+function groupOf(k){
+  if(k==='Supply_Voltage')return'Supply';
+  if(/Voltage/.test(k))return'Voltage';
+  if(/Current/.test(k))return'Current';
+  if(/Freq/.test(k))return'Frequency';
+  if(/PF_/.test(k))return'Power factor';
+  if(/CosPhi/.test(k))return'cos';
+  if(/TanPhi/.test(k))return'tan';
+  return'Supply';
+}
+
+const hist = {};      // key -> [v|null]
+const charts = {};    // key -> {ctx,canvas,color,unit}
+let order = [], units = {}, paused = false, timer = null;
+const main = document.getElementById('main');
+
+function build(){
+  const byGroup = {};
+  order.forEach(k => (byGroup[groupOf(k)] ??= []).push(k));
+  for(const [g,label] of GROUPS){
+    const keys = byGroup[g]; if(!keys||!keys.length) continue;
+    const sec = document.createElement('section');
+    const eb = document.createElement('div'); eb.className='eyebrow';
+    eb.innerHTML = `<h2>${label}</h2><div class="rule"></div><div class="count">${keys.length} ch</div>`;
+    const row = document.createElement('div'); row.className='row';
+    for(const k of keys) row.appendChild(makePanel(k));
+    sec.append(eb,row); main.appendChild(sec);
+  }
+}
+
+function makePanel(k){
+  const ph = phaseOf(k), color = PHASE_COLOR[ph];
+  const p = document.createElement('div'); p.className='panel';
+  const cap = document.createElement('div'); cap.className='cap';
+  cap.innerHTML =
+    `<span class="chip" style="background:${color}">${PHASE_LABEL[ph]}</span>`+
+    `<span class="nm">${k}</span>`+
+    `<span class="rd" id="rd_${k}" style="color:${color}">&mdash;</span>`;
+  const cv = document.createElement('canvas');
+  p.append(cap,cv);
+  hist[k] = [];
+  charts[k] = { canvas:cv, ctx:cv.getContext('2d'), color, unit:units[k]||'' };
+  return p;
+}
+
+function fmt(v){
+  if(v===null||v===undefined||!isFinite(v))return'--';
+  const a=Math.abs(v);
+  if(a!==0&&(a>=1e5||a<1e-3))return v.toExponential(2);
+  return v.toFixed(a>=100?1:3);
+}
+
+function draw(k){
+  const {canvas,ctx,color} = charts[k];
+  const dpr = window.devicePixelRatio||1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if(canvas.width!==w*dpr||canvas.height!==h*dpr){canvas.width=w*dpr;canvas.height=h*dpr;}
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+
+  const padL=42,padR=10,padT=6,padB=8;
+  const x0=padL,y0=padT,pw=w-padL-padR,ph=h-padT-padB;
+  ctx.fillStyle='#fff'; ctx.fillRect(x0,y0,pw,ph);
+
+  const data=hist[k];
+  const ys=data.filter(v=>v!==null&&isFinite(v));
+  let lo=0,hi=1;
+  if(ys.length){ lo=Math.min(...ys); hi=Math.max(...ys);
+    if(lo===hi){lo-=1;hi+=1;} const m=(hi-lo)*0.10; lo-=m; hi+=m; }
+
+  // grid + y ticks (MATLAB-style)
+  ctx.font='10px '+getComputedStyle(document.body).getPropertyValue('--mono');
+  ctx.textAlign='right'; ctx.textBaseline='middle'; ctx.lineWidth=1;
+  const T=4;
+  for(let i=0;i<=T;i++){
+    const gy=y0+ph*i/T;
+    ctx.strokeStyle='#e7eaef'; ctx.beginPath(); ctx.moveTo(x0,gy); ctx.lineTo(x0+pw,gy); ctx.stroke();
+    ctx.fillStyle='#8a93a0'; ctx.fillText(fmt(hi-(hi-lo)*i/T),x0-5,gy);
+  }
+  for(let i=1;i<4;i++){ const gx=x0+pw*i/4;
+    ctx.strokeStyle='#eef1f5'; ctx.beginPath(); ctx.moveTo(gx,y0); ctx.lineTo(gx,y0+ph); ctx.stroke(); }
+  ctx.strokeStyle='#9aa2ad'; ctx.strokeRect(x0,y0,pw,ph);
+
+  if(!ys.length) return;
+  // trace
+  ctx.strokeStyle=color; ctx.lineWidth=1.6; ctx.lineJoin='round'; ctx.beginPath();
+  const n=data.length; let started=false, lastX=0,lastY=0;
+  for(let i=0;i<n;i++){
+    const v=data[i]; if(v===null||!isFinite(v)){started=false;continue;}
+    const px=x0+(n===1?pw:pw*i/(n-1));
+    const py=y0+ph-ph*(v-lo)/(hi-lo);
+    if(!started){ctx.moveTo(px,py);started=true;}else ctx.lineTo(px,py);
+    lastX=px;lastY=py;
+  }
+  ctx.stroke();
+  // live head dot
+  ctx.fillStyle=color; ctx.beginPath(); ctx.arc(lastX,lastY,2.4,0,7); ctx.fill();
+}
+
+async function poll(){
+  try{
+    const d = await (await fetch('/data',{cache:'no-store'})).json();
+    if(!order.length){ order=d.order; units=d.units; build();
+      document.getElementById('meta').textContent =
+        `${d.meta.port} · ${d.meta.baud} 8N1 · ID ${d.meta.unit}`; }
+
+    const led=document.getElementById('led');
+    led.classList.toggle('on',d.connected);
+    document.getElementById('stxt').textContent = d.connected?'connected':'no device';
+
+    if(!paused){
+      for(const k of order){
+        const raw=d.values[k];
+        const v=(raw===null||raw===undefined)?null:Number(raw);
+        const buf=hist[k]; buf.push(v); if(buf.length>MAXPTS) buf.shift();
+        const rd=document.getElementById('rd_'+k);
+        if(v===null){ rd.textContent='n/a'; rd.classList.add('na'); }
+        else{ rd.textContent=fmt(v)+(units[k]?' '+units[k]:''); rd.classList.remove('na'); }
+        draw(k);
+      }
+    }
+  }catch(e){
+    document.getElementById('led').classList.remove('on');
+    document.getElementById('stxt').textContent='server offline';
+  }
+}
+
+function tickClock(){
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-GB');
+}
+function restart(){ if(timer)clearInterval(timer);
+  timer=setInterval(poll,Number(document.getElementById('rate').value)); }
+
+document.getElementById('pause').onclick=e=>{paused=!paused;e.target.textContent=paused?'Resume':'Pause';};
+document.getElementById('clear').onclick=()=>{for(const k of order){hist[k]=[];draw(k);}};
+document.getElementById('rate').onchange=restart;
+window.addEventListener('resize',()=>{for(const k of order)draw(k);});
+
+setInterval(tickClock,1000); tickClock();
+poll().then(restart);
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+# DKM-440 mapping tool dependencies.
+# Install with:  python -m pip install -r requirements.txt
+pymodbus>=3.6,<4      # Modbus RTU master (handles framing, CRC, timing)
+pyserial>=3.5         # serial backend for the CH340 USB-RS485 adapter on COM13

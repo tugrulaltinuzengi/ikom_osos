@@ -1,0 +1,15 @@
+# DATAKOM's own manuals for the DKM-440. Kept in the delivered folder, not
+# republished here — they are the vendor's documents, not ours. Download them
+# from datakom.com.tr; nothing in this repo needs them to build or run.
+reference/datasheets/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Office lock files
+~$*
+
+# OS cruft
+Thumbs.db
+.DS_Store

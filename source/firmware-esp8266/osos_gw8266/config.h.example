@@ -1,0 +1,108 @@
+// Copy this file to config.h and fill in the blanks. config.h is gitignored.
+//
+//   copy config.h.example config.h
+//
+// Nothing secret belongs in this file - it is the committed template.
+#pragma once
+
+#include <stdint.h>   // CFG_ANALYZERS/CFG_LOAD_PINS are typed, not bare macros
+
+// --- WiFi -------------------------------------------------------------------
+#define CFG_WIFI_SSID   "your-ssid"
+#define CFG_WIFI_PASS   "your-wifi-password"
+
+// --- Analyzers ---------------------------------------------------------------
+// This modem masters a bus of analyzers. Each entry is one DKM-440 reachable
+// over Modbus TCP. (192.169.10.36 verified reachable 2026-07-23: found by
+// scanning 192.169.10.0/24 for an open port 502, read Supply_Voltage = 26.5 V
+// with unit id 1.)
+//
+// Capped at 8 on this build, deliberately: the retained registry message for
+// 25 analyzers is ~1.3 KB against a 1536 B PubSubClient buffer shared with
+// telemetry, and the margin is too thin to trust. The protocol itself has no
+// limit - tools/fake_fleet.py demonstrates 25 per modem.
+struct AnalyzerCfg {
+  const char* id;      // stable machine id, never renamed - names live in MQTT
+  const char* host;
+  uint16_t    port;
+  uint8_t     unit;
+  uint16_t    interval_s;
+};
+
+static const AnalyzerCfg CFG_ANALYZERS[] = {
+    { "an-01", "192.169.10.36", 502, 1, 5 },
+};
+#define CFG_MAX_ANALYZERS 8
+
+// --- MQTT broker ------------------------------------------------------------
+// Set CFG_USE_TLS to 1 for EMQX Serverless (port 8883). BearSSL needs the
+// broker's root CA in CFG_CA_CERT to actually verify the server; with
+// CFG_TLS_INSECURE set to 1 it encrypts but does NOT authenticate - fine for a
+// bench test, not acceptable for a real deployment (SRS-01 NF-4).
+#define CFG_USE_TLS       1
+#define CFG_TLS_INSECURE  0
+
+// EMQX Serverless deployment (eu-central-1). Ports: 8883 MQTT/TLS,
+// 8084 WebSocket/TLS, 8443 REST API. All three verified reachable 2026-07-23.
+#define CFG_MQTT_HOST   "nba17802.ala.eu-central-1.emqxsl.com"
+#define CFG_MQTT_PORT   8883
+#define CFG_MQTT_USER   "fill-in-gateway-user"
+#define CFG_MQTT_PASS   "fill-in-gateway-password"
+
+// Modem identity. Topics become osos/m/<CFG_MODEM_ID>/... (protocol v2).
+// Use something unique if you are on the public playground broker - anyone can
+// subscribe to it.
+#define CFG_MODEM_ID    "gw-01"
+#define CFG_PROTOCOL_V  2
+
+// --- Behaviour --------------------------------------------------------------
+#define CFG_REPORT_INTERVAL_S  5
+#define CFG_SLEEP_INTERVAL_S   300
+
+// --- Load channels ----------------------------------------------------------
+// GPIO14/12/13/5 = D5/D6/D7/D1. None of these carries a boot strap.
+// GPIO15/D8 is excluded on purpose: it must be LOW at boot, and a relay module
+// idling it high stops the board booting at all.
+static const uint8_t CFG_LOAD_PINS[] = {14, 12, 13, 5};
+#define CFG_LOAD_CHANNELS  4
+
+// Most relay boards switch on a LOW input. Set to 0 for an active-high module
+// or a bare LED.
+#define CFG_LOAD_ACTIVE_LOW  1
+
+// Trust anchor for the broker. Only used when CFG_USE_TLS=1 and
+// CFG_TLS_INSECURE=0.
+//
+// This is a variable, not a #define, on purpose: the preprocessor is line-based
+// and cannot hold a multi-line raw string in a macro.
+//
+// DigiCert Global Root G2. The broker's leaf is issued by "Encryption Everywhere
+// DV TLS CA - G2" (DigiCert), which chains to this root. The server does not send
+// the root, so it must live here. Verified 2026-07-23 by completing a real TLS 1.3
+// handshake against the broker while trusting ONLY this certificate.
+//
+// A public root CA is not a secret - it is safe in git. Expires 2038-01-15.
+static const char CFG_CA_CERT[] = R"EOF(
+-----BEGIN CERTIFICATE-----
+MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh
+MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3
+d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH
+MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT
+MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j
+b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG
+9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzfNNNx7a8myaJCtSnX/RrohCgiN9RlUyfuI
+2/Ou8jqJkTx65qsGGmvPrC3oXgkkRLpimn7Wo6h+4FR1IAWsULecYxpsMNzaHxmx
+1x7e/dfgy5SDN67sH0NO3Xss0r0upS/kqbitOtSZpLYl6ZtrAGCSYP9PIUkY92eQ
+q2EGnI/yuum06ZIya7XzV+hdG82MHauVBJVJ8zUtluNJbd134/tJS7SsVQepj5Wz
+tCO7TG1F8PapspUwtP1MVYwnSlcUfIKdzXOS0xZKBgyMUNGPHgm+F6HmIcr9g+UQ
+vIOlCsRnKPZzFBQ9RnbDhxSJITRNrw9FDKZJobq7nMWxM4MphQIDAQABo0IwQDAP
+BgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBhjAdBgNVHQ4EFgQUTiJUIBiV
+5uNu5g/6+rkS7QYXjzkwDQYJKoZIhvcNAQELBQADggEBAGBnKJRvDkhj6zHd6mcY
+1Yl9PMWLSn/pvtsrF9+wX3N3KjITOYFnQoQj8kVnNeyIv/iPsGEMNKSuIEyExtv4
+NeF22d+mQrvHRAiGfzZ0JFrabA0UWTW98kndth/Jsw1HKj2ZL7tcu7XUIOGZX1NG
+Fdtom/DzMNU+MeKNhJ7jitralj41E6Vf8PlwUHBHQRFXGU7Aj64GxJUTFy8bJZ91
+8rGOmaFvE7FBcf6IKshPECBV1/MUReXgRPTqh5Uykw7+U0b6LJ3/iyK5S9kJRaTe
+pLiaWN0bfVKfjllDiIGknibVb63dDcY3fe0Dkhvld1927jyNxF1WW6LZZm6zNTfl
+MrY=
+-----END CERTIFICATE-----
+)EOF";

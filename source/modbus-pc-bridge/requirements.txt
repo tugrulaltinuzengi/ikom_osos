@@ -1,0 +1,7 @@
+# Stage 0 (PC bench) dependencies.
+# Install with:  python -m pip install -r requirements.txt
+pymodbus>=3.6,<4      # Modbus RTU master: handles framing, CRC and timing for us
+pyserial>=3.5         # serial backend used by pymodbus on COM13
+
+# Stage 2 (remote layer) only — uncomment when you add ThingsBoard:
+# paho-mqtt>=1.6

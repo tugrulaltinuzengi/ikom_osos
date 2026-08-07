@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OSOS — remote meter reading over MQTT</title>
+<style>
+:root{--bg:#fbfaf8;--fg:#1b1f24;--mut:#5b6672;--line:#e2e0dc;--card:#fff;
+--code:#f4f2ee;--accent:#0b6b7a;--warn:#8a5a00;--warnbg:#fdf6e6}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;
+--mut:#8494a6;--line:#232c37;--card:#141a22;--code:#161d26;--accent:#63d2e8;
+--warn:#e0b050;--warnbg:#211a08}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+-webkit-text-size-adjust:100%}
+.wrap{max-width:860px;margin:0 auto;padding:48px 22px 96px}
+h1{font-size:2.1rem;line-height:1.2;margin:0 0 .3em;letter-spacing:-.02em}
+h2{font-size:1.42rem;margin:2.4em 0 .7em;padding-top:1.1em;
+border-top:1px solid var(--line);letter-spacing:-.01em}
+h3{font-size:1.1rem;margin:2em 0 .5em}
+h4{font-size:.98rem;margin:1.6em 0 .4em;color:var(--mut)}
+p{margin:0 0 1em}
+a{color:var(--accent)}
+code{background:var(--code);padding:.12em .38em;border-radius:4px;
+font-family:ui-monospace,Consolas,"SF Mono",monospace;font-size:.875em}
+pre{background:var(--code);border:1px solid var(--line);border-radius:8px;
+padding:14px 16px;overflow-x:auto;margin:0 0 1.3em}
+pre code{background:none;padding:0;font-size:.83rem;line-height:1.55}
+blockquote{margin:0 0 1.3em;padding:12px 16px;background:var(--warnbg);
+border-left:3px solid var(--warn);border-radius:0 6px 6px 0}
+blockquote p{margin:0;color:var(--warn)}
+.tw{overflow-x:auto;margin:0 0 1.4em}
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);
+vertical-align:top}
+th{font-size:.74rem;text-transform:uppercase;letter-spacing:.07em;
+color:var(--mut);font-weight:600;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+ul,ol{margin:0 0 1.2em;padding-left:1.35em}
+li{margin:.3em 0}
+hr{border:none;border-top:1px solid var(--line);margin:2.4em 0}
+strong{font-weight:650}
+.sub{color:var(--mut);font-size:1.02rem;margin:0 0 2em}
+.toc{background:var(--card);border:1px solid var(--line);border-radius:10px;
+padding:16px 20px;margin:0 0 2.4em}
+.toc h2{border:none;margin:0 0 .5em;padding:0;font-size:.74rem;
+text-transform:uppercase;letter-spacing:.07em;color:var(--mut)}
+.toc ol{margin:0;padding-left:1.3em}
+.toc a{text-decoration:none}
+.toc a:hover{text-decoration:underline}
+</style></head><body><div class="wrap">
+<nav class="toc"><h2>Contents</h2><ol><li><a href="#1-see-it-working-in-five-minutes">1. See it working in five minutes</a></li><li><a href="#2-what-is-in-this-folder">2. What is in this folder</a></li><li><a href="#3-how-it-works">3. How it works</a></li><li><a href="#4-running-it-on-real-hardware">4. Running it on real hardware</a></li><li><a href="#5-securing-the-broker">5. Securing the broker</a></li><li><a href="#6-extending-it">6. Extending it</a></li><li><a href="#7-honest-status">7. Honest status</a></li><li><a href="#8-rebuilding-everything">8. Rebuilding everything</a></li></ol></nav>
+<h1 id="osos-remote-meter-reading-over-mqtt">OSOS — remote meter reading over MQTT</h1>
+<p><strong>Handoff to IKOM Bilişim · 2026-08-06</strong></p>
+<p>A DATAKOM DKM-440 power analyser is read over Modbus TCP by an ESP8266, republished as JSON over MQTT/TLS, and displayed on an Android phone that can name, group, sleep and load-switch a whole fleet of them.</p>
+<pre><code>DKM-440 ──ethernet──▶ LAN ◀──wifi── ESP8266 ──MQTT/TLS──▶ broker ──▶ phone</code></pre>
+<p>This is the only document you need. Everything else in this folder is source, the app, or the presentation. Read section 1 to see it working in five minutes, section 3 to understand it, section 4 to run it for real, and section 7 for what is genuinely unfinished.</p>
+<hr>
+
+<hr>
+<h2 id="1-see-it-working-in-five-minutes">1. See it working in five minutes</h2>
+<p>No meter, no gateway, no broker account. The simulator is a complete implementation of the protocol — it is what the app was developed against.</p>
+<pre class="lang-bash"><code>pip install paho-mqtt
+cd source/tools
+python fake_fleet.py --modems 3 --analyzers 8</code></pre>
+<p>Install <code>app/osos-hmi-0.3.1.apk</code> on any Android 8+ phone. Open <strong>Settings</strong>, set the broker to <code>broker.emqx.io</code> port <code>1883</code>, press <strong>Save &amp; reconnect</strong>. The Monitor tab fills with three modems and their analyzers. Tap one to open it — measured values stream for the meter you are watching, not for all 24 at once (see <em>Watching one meter at a time</em> below).</p>
+<p>Now drive it from the command line:</p>
+<pre class="lang-bash"><code>python meter_cmd.py --modem gw-01 ping
+python meter_cmd.py --modem gw-01 read_now --analyzer an-01
+python meter_cmd.py --modem gw-01 load --ch 3 --on
+python meter_cmd.py --modem gw-01 sleep --on
+python meter_cmd.py --modem gw-01 load --ch 9 --on    # refused, deliberately</code></pre>
+<p>Every command is answered. A bad channel, an unknown analyzer and an out-of-range interval all come back <code>ok:false</code> with a reason — <strong>silence is never an answer</strong>. Exit codes are 0 for accepted, 2 for refused, 3 for no reply, so this is scriptable.</p>
+<p>In the app, try: rename an analyzer with <strong>edit</strong>, give it a folder, then force close and reopen the app — the name comes back, because it lives on the broker and not in the phone. Flip <strong>Master sleep</strong> and watch the modems report <code>ASLEEP</code>.</p>
+<blockquote><p><code>broker.emqx.io</code> is a shared public broker. It throttles above a few messages a second and anyone can read it. Fine for this demo, wrong for anything real — section 4 points it at your own broker.</p></blockquote>
+<hr>
+<h2 id="2-what-is-in-this-folder">2. What is in this folder</h2>
+<div class='tw'><table><thead><tr><th>Folder</th><th>What</th></tr></thead><tbody><tr><td><code>app/</code></td><td><code>osos-hmi-0.3.1.apk</code> — install and run</td></tr><tr><td><code>presentation/</code></td><td>the delivery talk, plus the Python that generates it</td></tr><tr><td><code>source/android/</code></td><td>the Kotlin / Jetpack Compose app, with its 41 unit tests</td></tr><tr><td><code>source/firmware-esp8266/</code></td><td><strong>the gateway that runs</strong> — Modbus TCP, Arduino</td></tr><tr><td><code>source/firmware-esp32-rs485/</code></td><td>the earlier ESP-IDF / RS-485 build, for reference</td></tr><tr><td><code>source/browser-hmi/</code></td><td>the same HMI as a web page — no install</td></tr><tr><td><code>source/tools/</code></td><td>protocol module, fleet simulator, command CLI</td></tr><tr><td><code>source/neural-net-c/</code></td><td>the neural network in C, from scratch, with MNIST data</td></tr><tr><td><code>source/modbus-mapping/</code></td><td>how an undocumented register map was derived</td></tr><tr><td><code>reference/</code></td><td>the three SRS documents and the bench photos</td></tr></tbody></table></div>
+<p><strong>No credentials are anywhere in this folder.</strong> <code>config.h</code>, <code>BROKER.md</code>, <code>broker.env</code> and <code>www/config.js</code> are excluded by name, and the packaging script refuses to build the folder at all if a known password appears in the result. You supply your own — every place one belongs has a <code>.example</code> template beside it.</p>
+<hr>
+<h2 id="3-how-it-works">3. How it works</h2>
+<h3 id="the-chain">The chain</h3>
+<p>The meter speaks <strong>Modbus TCP on port 502</strong> over its own Ethernet port, so the gateway never touches RS-485 — no MAX3485, no direction toggling, no character timing. On an ESP8266 that matters twice, because the chip has one usable UART and it is the console. Reading over TCP keeps the serial console free while the gateway runs.</p>
+<p>The gateway earns its place as the <strong>WAN bridge</strong>: the meter is LAN-only and has no business on the internet. One controlled, authenticated egress point translates registers into JSON.</p>
+<h3 id="two-rules-explain-most-of-the-design">Two rules explain most of the design</h3>
+<p><strong>The machine owns the addresses. The operator owns the names.</strong> A modem publishes what it actually polls on a retained <code>registry</code> topic. The app writes names and folders to a separate retained <code>labels</code> topic. They share no field and no writer, so renaming a meter can never corrupt a Modbus address, and neither side can lose a race with the other. Renaming moves no data and breaks no history, because <strong>names are not topic segments</strong>.</p>
+<p><strong>State is observed, never requested.</strong> A refused command leaves the retained <code>state</code> topic unchanged. The app can never show a load as on merely because a command was sent — only because the modem reported it on.</p>
+<h3 id="the-topic-contract">The topic contract</h3>
+<p>Three implementations build these from one grammar — <code>source/tools/osos_proto.py</code>, the app&#x27;s <code>TopicRouter.kt</code>, and the firmware&#x27;s <code>commands.h</code> — so they cannot drift apart.</p>
+<pre><code>osos/m/{mid}/status              retained + LWT   modem alive/dead
+osos/m/{mid}/registry            retained         which analyzers exist   (MODEM writes)
+osos/m/{mid}/state               retained         sleep, interval, loads  (MODEM writes)
+osos/m/{mid}/cmd   -&gt;   /ack                      the command downlink
+osos/m/{mid}/event                                sleep enter/exit, load switch
+osos/m/{mid}/a/{aid}/telemetry                    the 22 measured values
+osos/m/{mid}/a/{aid}/status      retained         per-analyzer link state
+osos/m/{mid}/labels              retained         names + folders         (APP writes)
+osos/tree                        retained         folder definitions      (APP writes)
+
+osos/{gwId}/telemetry                             legacy v1, still rendered</code></pre>
+<p><code>{mid}</code> is a modem id (<code>gw-01</code>), <code>{aid}</code> an analyzer id (<code>an-01</code>). Both are flat, stable machine ids that never change once assigned.</p>
+<p><strong>Commands:</strong> <code>ping</code>, <code>read_now{analyzer}</code>, <code>set_interval{seconds}</code>, <code>sleep{on}</code>, <code>load{ch,on}</code>.</p>
+<h3 id="watching-one-meter-at-a-time">Watching one meter at a time</h3>
+<p>Identity, state, acks and labels are small and retained, so the app holds those for the <strong>whole</strong> fleet, always. Telemetry is neither — 24 analyzers at a 5 s interval is a message every 200 ms, most of it for meters nobody is looking at. So the app subscribes <code>osos/m/{mid}/a/+/telemetry</code> only for the modem it is working on: the one owning the <strong>selected</strong> analyzer, plus whichever one the Monitor has open.</p>
+<p>The selection is app state, not screen state. It survives switching tabs, which is what lets alarm rules keep evaluating while you are reading the Alarms tab. A meter you have not opened shows a dim <code>—</code> for its voltage in the fleet tree — that means <em>not subscribed</em>, not <em>faulty</em>; health comes from the badge beside the name, which is fed by the always-on per-analyzer <code>status</code> topic.</p>
+<p>Settings shows the exact filter list the app is holding at that moment. If a tile is empty, that card is the first place to look.</p>
+<h3 id="versioning-and-why-the-old-gateway-still-works">Versioning, and why the old gateway still works</h3>
+<p>Every modem-published payload carries <code>&quot;v&quot;: 2</code>. The legacy single-gateway topics carry no <code>v</code> and are therefore v1 by definition. That costs nothing and means the pre-v2 gateway still appears in the fleet tree, tagged <code>v1</code>, with no special case anywhere in the app. If a firmware update ever goes wrong, the system degrades to v1 rather than dying.</p>
+<h3 id="sleep">Sleep</h3>
+<p>Sleep is a longer report interval (5 s → 300 s) plus a lower WiFi duty cycle. It is <strong>never</strong> <code>ESP.deepSleep()</code> — that would drop WiFi, TCP and MQTT, so the modem could not receive its own wake command, and its last-will would fire and report it dead while it was merely resting. The broker connection stays up throughout, which is why a wake command is acknowledged in about two seconds instead of after the sleep interval.</p>
+<p>Alarms keep evaluating while asleep. Only the <strong>notification</strong> is suppressed; everything suppressed is recorded and returned as a digest banner on wake. The overnight record survives the quiet.</p>
+<h3 id="load-control">Load control</h3>
+<p>Relay channels on the modem&#x27;s own GPIO — <strong>not</strong> a meter register, so the DKM-440&#x27;s command block is never written. Four channels: GPIO14/12/13/5 = D5/D6/D7/D1. GPIO15/D8 is excluded on purpose: it must be LOW at boot, and a relay module idling it high stops the board booting at all.</p>
+<p>Loads are <strong>not persisted</strong> across reboots. Defaulting them off on boot is structural rather than a policy someone can forget — re-closing a contactor after a power cut should be an explicit decision.</p>
+<p>There is one more safety property worth knowing: the app can recognise hand-drawn symbols and turn them into commands, and <code>load</code> is deliberately absent from the bindable action list. <strong>No drawn symbol can ever actuate a relay.</strong></p>
+<hr>
+<h2 id="4-running-it-on-real-hardware">4. Running it on real hardware</h2>
+<h3 id="the-meter">The meter</h3>
+<p>Verified reachable at <code>192.169.10.74:502</code>, unit id <strong>1</strong>, with a <strong>DHCP reservation</strong> on MAC <code>00-00-36-7F-04-55</code> so it survives a power cycle. Before that reservation the lease wandered across four addresses and each move silently blinded the gateway — <code>CFG_ANALYZERS</code> is compile-time, so a moved meter means rescan and reflash. <strong>Reserve the address.</strong></p>
+<p>Word order is <strong>big-endian</strong> (<code>0x41D4 0000</code> decodes to 26.5). The meter tarpits a master that fires requests back to back, so <code>kReadGapMs = 30</code> in <code>meter_map.h</code> preserves the gap — removing it makes reads fail intermittently.</p>
+<p>Phase voltages read <code>0.000</code> on the bench because it is a True-RMS <strong>AC</strong> meter with nothing on its voltage inputs. That is correct, not a fault.</p>
+<blockquote><p><code>Supply_Voltage</code> is not a constant — register 260 reads back whatever the bench supply is set to. 26.5 V, 13.2 V and 23.35 V have all been recorded and all were correct at the time. Do not use it as a regression reference; use the register count (22/22) instead.</p></blockquote>
+<h3 id="the-gateway">The gateway</h3>
+<p>Copy <code>source/firmware-esp8266/osos_gw8266/config.h.example</code> to <code>config.h</code> and fill in WiFi, broker and the analyzer table:</p>
+<pre class="lang-c"><code>static const AnalyzerCfg CFG_ANALYZERS[] = {
+    { &quot;an-01&quot;, &quot;192.169.10.74&quot;, 502, 1, 5 },   // id, host, port, unit, interval_s
+};
+#define CFG_MODEM_ID    &quot;gw-01&quot;
+#define CFG_LOAD_ACTIVE_LOW  1     // 0 for an active-high relay board or a bare LED</code></pre>
+<p>Build with <code>arduino-cli</code>, ESP8266 core 3.1.2, PubSubClient 2.8, ArduinoJson 7.4.3:</p>
+<pre class="lang-bash"><code>arduino-cli compile -b esp8266:esp8266:nodemcuv2 \
+    --libraries &quot;&lt;your Arduino libraries folder&gt;&quot; \
+    source/firmware-esp8266/osos_gw8266
+arduino-cli upload -b esp8266:esp8266:nodemcuv2 -p COM11 \
+    source/firmware-esp8266/osos_gw8266</code></pre>
+<p>Two traps worth knowing: <strong><code>COM11</code> admits one program at a time</strong> — close the serial monitor before flashing — and the analyzer count is <strong>capped at 8 on this board</strong>, because a retained registry for 25 analyzers is about 1.3 KB against a 1536 B buffer shared with telemetry. The protocol itself has no limit; the simulator demonstrates 25 per modem.</p>
+<p>Measured footprint (v0.4, TLS on): RAM 33,920 / 80,192 (42 %), <strong>IRAM 60,799 / 65,536 (92 %)</strong>, flash 388,320 / 1,048,576 (37 %). IRAM is the tight constraint on this chip, not flash — about 4.7 KB left. If it ever overflows, the fix is moving code off an <code>ICACHE_RAM_ATTR</code> path, not shrinking logic.</p>
+<h3 id="the-phone">The phone</h3>
+<p>Settings → broker host, port, TLS on, username, password → <strong>Save &amp; reconnect</strong>. Nothing else is broker-specific: no vendor API, no EMQX extension. A bad port or offline-alarm value is refused with a message rather than quietly replaced by a default, so the field and the connection can never disagree.</p>
+<p>Below that, <strong>Active subscriptions</strong> lists the topic filters the app currently holds. It is read from the client, not composed for display, so it is the fastest way to tell a broker/ACL problem from a “not subscribed to that meter” one.</p>
+<h3 id="tls">TLS</h3>
+<p>The gateway completes a real TLS 1.3 handshake with <code>CFG_TLS_INSECURE=0</code>, verifying the server against a DigiCert Global Root G2 anchor compiled into <code>config.h</code>. The broker negotiates Maximum Fragment Length, so BearSSL runs with 1 KB receive buffers instead of the default 16 KB — that headroom is the only reason TLS fits alongside the JSON encoder on this chip.</p>
+<p><code>CFG_TLS_INSECURE=1</code> still exists for bench work. It encrypts without authenticating the server and is <strong>not</strong> acceptable in deployment.</p>
+<hr>
+<h2 id="5-securing-the-broker">5. Securing the broker</h2>
+<p><strong>This is the one open security item.</strong> Today the gateway and the phone share one credential, so any device holding it can publish as any other. It matters more than it used to, because the phone now <em>publishes</em> — commands, labels and the folder tree — not just subscribes.</p>
+<p>The topic design already separates the two roles cleanly. The ACL below is what makes the broker enforce it.</p>
+<h3 id="users">Users</h3>
+<p>One user <strong>per modem</strong>, plus one head-end user. The per-modem credential is the whole point — it is what confines a modem to its own subtree.</p>
+<div class='tw'><table><thead><tr><th>Username</th><th>Held by</th><th>Goes in</th></tr></thead><tbody><tr><td><code>gw-01</code></td><td>the modem</td><td><code>config.h</code> (never committed)</td></tr><tr><td><code>headend</code></td><td>the phone, desktop MQTT clients</td><td>app Settings</td></tr></tbody></table></div>
+<p>Use generated passwords. Do not reuse the current shared credential.</p>
+<h3 id="rules-for-gw-01">Rules — for <code>gw-01</code></h3>
+<div class='tw'><table><thead><tr><th>#</th><th>Permission</th><th>Action</th><th>Topic</th></tr></thead><tbody><tr><td>1</td><td>Allow</td><td>Publish</td><td><code>osos/m/gw-01/#</code></td></tr><tr><td>2</td><td>Allow</td><td>Subscribe</td><td><code>osos/m/gw-01/cmd</code></td></tr><tr><td>3</td><td>Deny</td><td>All</td><td><code>#</code></td></tr></tbody></table></div>
+<h3 id="rules-for-headend">Rules — for <code>headend</code></h3>
+<div class='tw'><table><thead><tr><th>#</th><th>Permission</th><th>Action</th><th>Topic</th></tr></thead><tbody><tr><td>1</td><td>Allow</td><td>Publish</td><td><code>osos/m/+/cmd</code></td></tr><tr><td>2</td><td>Allow</td><td>Publish</td><td><code>osos/m/+/labels</code></td></tr><tr><td>3</td><td>Allow</td><td>Publish</td><td><code>osos/tree</code></td></tr><tr><td>4</td><td>Allow</td><td>Subscribe</td><td><code>osos/#</code></td></tr><tr><td>5</td><td>Deny</td><td>All</td><td><code>#</code></td></tr></tbody></table></div>
+<p><strong>The deny-all row must be last.</strong> Brokers evaluate top to bottom and stop at the first match; a deny-all placed first refuses everything.</p>
+<p>If the pre-v2 gateway is still running, <code>gw-01</code> also needs <code>Allow · Publish · osos/dkm440-gw1/#</code>, placed above the deny-all. Remove it when that gateway is retired.</p>
+<h3 id="prove-it-works">Prove it works</h3>
+<p>Run this <strong>with the gateway credential</strong>. It must fail.</p>
+<pre class="lang-python"><code>import paho.mqtt.client as mqtt, time
+c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+c.username_pw_set(&quot;gw-01&quot;, &quot;&lt;gateway password&gt;&quot;)
+c.tls_set()
+c.connect(&quot;&lt;your-broker&gt;&quot;, 8883, 30)
+c.loop_start()
+# gw-01 publishing as gw-02 - exactly what the ACL exists to stop
+c.publish(&quot;osos/m/gw-02/a/an-01/telemetry&quot;, &#x27;{&quot;v&quot;:2}&#x27;, qos=1)
+time.sleep(3)</code></pre>
+<p>Expected: refused, with an authorization failure in the broker&#x27;s client log. Subscribe from a second client to confirm nothing arrived. <strong>If it succeeds, the deny-all row is misordered</strong> — the single most likely mistake, and it fails silently in the direction that looks fine.</p>
+<p>Then check the other direction: with the <code>headend</code> credential, publishing to <code>osos/m/gw-01/a/an-01/telemetry</code> must also be refused. The head-end should not be able to fabricate a meter reading.</p>
+<hr>
+<h2 id="6-extending-it">6. Extending it</h2>
+<div class='tw'><table><thead><tr><th>To add</th><th>What it costs</th></tr></thead><tbody><tr><td>an analyzer</td><td>one line in <code>CFG_ANALYZERS</code>, reflash</td></tr><tr><td>a modem</td><td>a different <code>CFG_MODEM_ID</code>, its own broker user</td></tr><tr><td>a different meter</td><td>a new <code>meter_map.h</code></td></tr></tbody></table></div>
+<p>No topic changes, no app rebuild, no migration in any of those cases. A new analyzer appears in the tree the moment the modem republishes its registry — named <code>an-02</code> until someone names it properly from the phone.</p>
+<p><strong>For a meter whose register map you do not have</strong>, the method used to derive the DKM-440&#x27;s is written down and repeatable: <code>source/modbus-mapping/METHOD.md</code>. Scan, record, and fit candidate registers against known values by least squares. That method is arguably worth more than the map it produced.</p>
+<h3 id="what-is-already-vendor-neutral">What is already vendor-neutral</h3>
+<p>The topic grammar, the gateway and the app are not specific to this meter. Only <code>meter_map.h</code> is. Any Modbus TCP field device can go behind this gateway in about a day once its map is known.</p>
+<h3 id="wiring-the-fleet-into-ikom-data-manager">Wiring the fleet into IKOM Data Manager</h3>
+<p>Two retained topics carry everything the app knows about naming: <code>osos/m/+/labels</code> and <code>osos/tree</code>. A bridge that subscribes to those two, plus <code>osos/m/+/a/+/telemetry</code>, has the whole fleet — identified, named and grouped — without touching the phone or the gateway.</p>
+<h3 id="before-any-production-use">Before any production use</h3>
+<p><strong>Store-and-forward.</strong> <code>buffered</code> is always <code>false</code> today and honestly reported as such: if the uplink drops, those frames are gone. A reader that silently loses data during a network blip cannot be a system of record. This is the gate before any billing or compliance use, ahead of every other feature.</p>
+<p>The ESP32 build reserves ~55 KB for a 512-frame ring; this board measured 36 KB free heap <em>before</em> WiFi came up, so that design cannot be ported as-is. A smaller RAM ring or a LittleFS-backed queue on the 4 MB flash is the way in.</p>
+<p><strong>A historian.</strong> 720 frames in RAM is monitoring, not history. Billing and compliance need durable storage.</p>
+<p><strong>Per-device credentials.</strong> Section 5. Cheap now, expensive after the first customer site.</p>
+<hr>
+<h2 id="7-honest-status">7. Honest status</h2>
+<h3 id="proven-on-hardware">Proven on hardware</h3>
+<ul><li>22 / 22 registers read over 15 consecutive cycles, no partial reads</li><li>a PC client read the same value in the same second, over the broker</li><li>TLS 1.3 handshake with the server verified against a pinned root</li><li>the meter&#x27;s address survives a power cycle</li></ul>
+<h3 id="proven-on-an-emulator-against-the-simulated-fleet">Proven on an emulator against the simulated fleet</h3>
+<ul><li>the fleet tree renders multiple v2 modems <strong>and</strong> a legacy v1 gateway side by side, all analyzers live</li><li>renaming an analyzer publishes retained <code>labels</code>; a <strong>separate</strong> MQTT client reads it back, and it survives force-stopping the app</li><li>every command and every refusal path, including bad channel and unknown analyzer</li><li>sleep, then wake — the wake acknowledged in about <strong>two seconds</strong>, not after the 300 s interval, which is what proves the connection survived sleep</li><li>with the fleet asleep: alarms fired, <strong>no notification was posted</strong>, each was logged as muted, and the wake digest listed them</li><li><code>load</code> is absent from the bindable actions, so no drawn symbol can switch a relay</li></ul>
+<p>41 unit tests cover the topic grammar, the subscription policy, the fleet reducer and the alarm mute gate. They run with no device.</p>
+<h3 id="written-and-compiles-but-has-never-executed">Written and compiles, but has never executed</h3>
+<p><strong>Firmware v0.4</strong> — the fleet scheduler, sleep, the four load channels and the command downlink. It compiles clean with the footprint quoted in section 4, but the hardware was not available when it was written, so it has never run. Flash it and work through section 4, then re-check the command round-trip, the per-analyzer read, sleep and wake, and load switching.</p>
+<p>Until then the previous firmware keeps working and the app keeps rendering it as a v1 gateway. Rollback is a <code>git checkout</code> of the firmware folder plus a reflash.</p>
+<h3 id="open-and-said-so">Open, and said so</h3>
+<ul><li><strong>broker role separation</strong> — section 5, specified and not applied</li><li><strong>store-and-forward</strong> — <code>buffered</code> is always <code>false</code></li><li><strong>awake-versus-asleep current</strong> — never measured, so no figure is quoted anywhere. Station mode already defaults to modem sleep, so part of the saving is banked before this change and the honest result may be smaller than intuition suggests</li><li><strong>mains accuracy</strong> never verified against a DMM; the supply channel reads about 2 % high and that was not investigated</li><li><strong>the overnight soak</strong> was never run</li></ul>
+<p>Nothing in this document is rounded up. Where a number is quoted it was measured; where it was not measured, it is absent.</p>
+<hr>
+<h2 id="8-rebuilding-everything">8. Rebuilding everything</h2>
+<pre class="lang-bash"><code># the app                          JAVA_HOME must point at a JDK 17
+cd source/android &amp;&amp; ./gradlew assembleDebug
+
+# its tests - 41, no device needed
+cd source/android &amp;&amp; ./gradlew testDebugUnitTest
+
+# the gateway
+arduino-cli compile -b esp8266:esp8266:nodemcuv2 source/firmware-esp8266/osos_gw8266
+
+# the neural network, and the gradient check that proves the maths
+cd source/neural-net-c &amp;&amp; make &amp;&amp; ./gradcheck &amp;&amp; ./mnist
+
+# the presentation
+cd presentation/source &amp;&amp; python mockups.py &amp;&amp; python build.py --final</code></pre>
+<p>The browser HMI needs no build: copy <code>source/browser-hmi/config.example.js</code> to <code>config.js</code>, serve the folder over HTTP, open <code>index.html</code>.</p>
+<h3 id="two-environment-traps">Two environment traps</h3>
+<ul><li><strong>Gradle needs a JDK 17.</strong> If the machine default <code>java</code> is JDK 8, Gradle fails with a confusing error. Set <code>JAVA_HOME</code> explicitly; Android Studio ships a suitable JDK at <code>&lt;studio&gt;/jbr</code>.</li><li><strong><code>arduino-cli</code> needs the right library path.</strong> If it cannot find <code>PubSubClient.h</code>, pass <code>--libraries &lt;path&gt;</code> — the path in <code>arduino-cli.yaml</code> may point somewhere that no longer exists.</li></ul>
+</div></body></html>

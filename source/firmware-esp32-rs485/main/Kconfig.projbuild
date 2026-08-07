@@ -1,0 +1,76 @@
+menu "OSOS Gateway Configuration"
+
+    config OSOS_WIFI_SSID
+        string "WiFi SSID"
+        default "myssid"
+
+    config OSOS_WIFI_PASS
+        string "WiFi password"
+        default "mypassword"
+
+    config OSOS_GW_ID
+        string "Gateway id (used in osos/{gw}/... topics)"
+        default "dkm440-gw1"
+
+    config OSOS_MQTT_URI
+        string "MQTT broker URI"
+        default "mqtt://broker.emqx.io:1883"
+        help
+            Playground: mqtt://broker.emqx.io:1883 (no auth, public!).
+            EMQX Serverless: mqtts://xxxx.emqxsl.com:8883 (TLS via cert bundle).
+
+    config OSOS_MQTT_USER
+        string "MQTT username (empty = anonymous)"
+        default ""
+
+    config OSOS_MQTT_PASS
+        string "MQTT password"
+        default ""
+
+    config OSOS_SIM_MODE
+        bool "Simulate meter values (no Modbus hardware needed)"
+        default y
+        help
+            Publish plausible synthetic values instead of polling the DKM-440.
+            Turn off once the RS-485 wiring is in place.
+
+    config OSOS_REPORT_INTERVAL
+        int "Default telemetry interval (seconds)"
+        range 1 900
+        default 10
+
+    config OSOS_MB_UART_PORT
+        int "Modbus UART port"
+        range 0 2
+        default 1
+
+    config OSOS_MB_TXD
+        int "Modbus UART TX GPIO (to RS-485 DI)"
+        default 17
+
+    config OSOS_MB_RXD
+        int "Modbus UART RX GPIO (to RS-485 RO)"
+        default 18
+
+    config OSOS_MB_RTS
+        int "Modbus RS-485 direction GPIO (DE/RE tied; -1 for auto-direction modules)"
+        default 21
+
+    config OSOS_MB_BAUD
+        int "Modbus baudrate"
+        default 19200
+
+    config OSOS_MB_SLAVE_ID
+        int "DKM-440 slave id"
+        default 1
+
+    config OSOS_MB_TIMEOUT_MS
+        int "Modbus response timeout (ms)"
+        range 100 2000
+        default 300
+        help
+            The DKM-440 answers within tens of ms at 19200 baud. A short
+            timeout keeps a dead meter from stalling the telemetry loop
+            (v0.1 used 1000 ms -> ~45 s worst-case sweep).
+
+endmenu
