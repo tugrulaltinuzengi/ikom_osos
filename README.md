@@ -210,7 +210,7 @@ from the bindable action list. **No drawn symbol can ever actuate a relay.**
 ### The meter
 
 Verified reachable at `192.169.10.74:502`, unit id **1**, with a **DHCP
-reservation** on MAC `00-00-36-7F-04-55` so it survives a power cycle. Before
+reservation** on MAC `xx-xx-xx-xx-xx-xx` so it survives a power cycle. Before
 that reservation the lease wandered across four addresses and each move silently
 blinded the gateway — `CFG_ANALYZERS` is compile-time, so a moved meter means
 rescan and reflash. **Reserve the address.**
@@ -495,3 +495,13 @@ The browser HMI needs no build: copy `source/browser-hmi/config.example.js` to
 - **`arduino-cli` needs the right library path.** If it cannot find
   `PubSubClient.h`, pass `--libraries <path>` — the path in `arduino-cli.yaml`
   may point somewhere that no longer exists.
+
+---
+
+## License and third-party notes
+
+Original code and documents: MIT, see `LICENSE`. DATAKOM's DKM-440 manuals are
+not included (vendor documents). The ESP32 build restores `espressif/esp-modbus`
+(Apache-2.0) and `espressif/mdns` from `dependencies.lock` via `idf.py reconfigure`;
+they are no longer vendored in git. `source/browser-hmi/mqtt.min.js` is MQTT.js (MIT).
+The MNIST data fetched by `source/neural-net-c` has its own terms.

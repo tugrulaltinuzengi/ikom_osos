@@ -9,7 +9,7 @@
 
 Against the real gateway on EMQX Serverless, add TLS and credentials:
 
-    python meter_cmd.py --tls --host nba17802.ala.eu-central-1.emqxsl.com \\
+    python meter_cmd.py --tls --host your-deployment.emqxsl.com \\
         --user headend --pass ... --modem gw-01 ping
 
 Exit codes: 0 ack ok, 2 ack refused, 3 no ack. Scriptable on purpose - the

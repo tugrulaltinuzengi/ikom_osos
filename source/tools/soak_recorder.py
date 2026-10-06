@@ -8,7 +8,7 @@ overnight, taking the lot with it. This recorder runs on the bench PC instead:
 it is independent of the phone, appends every message to disk as it arrives, and
 survives broker outages.
 
-    python soak_recorder.py --host nba17802.ala.eu-central-1.emqxsl.com --port 8883 \
+    python soak_recorder.py --host your-deployment.emqxsl.com --port 8883 \
         --tls --user USER --pass PASS --gw dkm440-gw1 --out soak-2026-08-01.jsonl
 
 Credentials are read from the environment when the flags are omitted:

@@ -44,7 +44,7 @@ static const AnalyzerCfg CFG_ANALYZERS[] = {
 
 // EMQX Serverless deployment (eu-central-1). Ports: 8883 MQTT/TLS,
 // 8084 WebSocket/TLS, 8443 REST API. All three verified reachable 2026-07-23.
-#define CFG_MQTT_HOST   "nba17802.ala.eu-central-1.emqxsl.com"
+#define CFG_MQTT_HOST   "your-deployment.emqxsl.com"
 #define CFG_MQTT_PORT   8883
 #define CFG_MQTT_USER   "fill-in-gateway-user"
 #define CFG_MQTT_PASS   "fill-in-gateway-password"

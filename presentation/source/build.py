@@ -19,7 +19,7 @@ import theme_osos as T
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
-IMG = os.path.join(ROOT, "docs", "img")
+IMG = os.path.join(ROOT, "reference", "photos")
 FIG = os.path.join(HERE, "figures")
 OUTFILE = os.path.join(HERE, "OSOS-Delivery.pptx")
 
@@ -158,7 +158,7 @@ def s_summary(prs):
          "A PC-side Modbus client read the same value the gateway published, "
          "in the same second."),
         ("The meter cannot move.",
-         "Its address is a DHCP reservation on MAC 00-00-36-7F-04-55, because "
+         "Its address is a DHCP reservation on MAC xx-xx-xx-xx-xx-xx, because "
          "CFG_METER_HOST is a compile-time constant."),
     ], size=12)
     T.footer(s, num())
@@ -257,7 +257,7 @@ def s_bench(prs):
         T.text(s, 10.90, y, 1.6, 0.24, v, size=10, color=T.TEXT, font=T.MONO)
         y += 0.34
     T.rule(s, 9.79, y + 0.04, 2.6, color=T.HAIR)
-    T.text(s, 9.79, y + 0.22, 2.6, 0.24, "SSID IKOM_Bilisim", size=9.5,
+    T.text(s, 9.79, y + 0.22, 2.6, 0.24, "SSID your-ssid", size=9.5,
            color=T.MUTED, font=T.MONO)
     T.text(s, 9.79, y + 0.48, 2.6, 0.24, "RSSI −46 dBm", size=9.5,
            color=T.MUTED, font=T.MONO)
@@ -419,8 +419,8 @@ def s_osi(prs):
          "IPv4  192.169.10.75 → 192.169.10.74",
          "IPv4 → …ala.eu-central-1.emqxsl.com"),
         ("2", "Data link",
-         "Ethernet II   MAC 00-00-36-7F-04-55",
-         "802.11 b/g/n   CSMA/CA, SSID IKOM_Bilisim"),
+         "Ethernet II   MAC xx-xx-xx-xx-xx-xx",
+         "802.11 b/g/n   CSMA/CA, SSID your-ssid"),
         ("1", "Physical",
          "Cat5e twisted pair, RJ45",
          "2.4 GHz ISM   RSSI −46 dBm at the bench"),
@@ -629,7 +629,7 @@ def s_uart(prs):
 
     T.code(s, 6.90, 5.02, 5.73, 1.48, [
         ("tls: broker supports MFLN(1024) - using small buffers", T.MUTED),
-        ("mqtt: connecting to nba17802...emqxsl.com:8883 ... ok", T.GREEN),
+        ("mqtt: connecting to your-deployment.emqxsl.com:8883 ... ok", T.GREEN),
         ("seq=15  22/22 regs  besleme=23.350  heap=18432", T.LCD),
     ], title="COM11 · 115200 BAUD", accent=T.LCD)
     T.footer(s, num())
@@ -1769,8 +1769,8 @@ def c_osi(prs):
          "IPv4  192.169.10.75 → 192.169.10.74",
          "IPv4 → …ala.eu-central-1.emqxsl.com"),
         ("2", "Data link",
-         "Ethernet II   MAC 00-00-36-7F-04-55",
-         "802.11 b/g/n   CSMA/CA, SSID IKOM_Bilisim"),
+         "Ethernet II   MAC xx-xx-xx-xx-xx-xx",
+         "802.11 b/g/n   CSMA/CA, SSID your-ssid"),
         ("1", "Physical",
          "Cat5e twisted pair, RJ45",
          "2.4 GHz ISM   RSSI −46 dBm at the bench"),
