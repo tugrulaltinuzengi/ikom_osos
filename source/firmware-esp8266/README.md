@@ -25,7 +25,7 @@ egress point that translates Modbus registers into JSON on MQTT.
 | | |
 |---|---|
 | Meter address | `192.169.10.74:502`, unit id **1** |
-| Address stability | **DHCP reservation** on MAC `00-00-36-7F-04-55`; survives a power cycle |
+| Address stability | **DHCP reservation** on MAC `xx-xx-xx-xx-xx-xx`; survives a power cycle |
 | Word order | **big-endian** confirmed (`0x41D4 0000` decodes to 26.5) |
 | Board | Ai-Thinker ESP8266, 4 MB flash, CP2102 bridge on **COM11** |
 | Gateway address | `192.169.10.75`, plain DHCP — no reservation needed |
@@ -167,7 +167,7 @@ verifying the server against the DigiCert Global Root G2 anchor compiled into
 
 ```
 tls: broker supports MFLN(1024) - using small buffers
-mqtt: connecting to nba17802.ala.eu-central-1.emqxsl.com:8883 ... ok
+mqtt: connecting to your-deployment.emqxsl.com:8883 ... ok
 ```
 
 The broker negotiates Maximum Fragment Length, so BearSSL runs with 1 KB buffers

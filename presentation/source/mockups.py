@@ -334,7 +334,7 @@ def monitor():
            ("[11:19:45] mqtt: telemetry seq 4123  22/22", MUTED),
            ("[11:19:40] status: online fw 0.3.0 rssi -46", DIM),
            ("[11:19:40] mqtt: connected 8883 tls1.3", GREEN),
-           ("[11:19:38] wifi: IKOM_Bilisim  192.169.10.75", DIM)]
+           ("[11:19:38] wifi: your-ssid  192.169.10.75", DIM)]
     y += 16
     for t, c in log:
         tx(d, (14, y), t, mono(7), c)
@@ -491,8 +491,8 @@ def alarms():
 # --------------------------------------------------------------- MNIST strip
 def mnist_strip(n=10, cell=64, gap=6):
     """Real digits, read straight out of the IDX test set the trainer eats."""
-    img_path = os.path.join(ROOT, "neural_net_c", "data", "t10k-images-idx3-ubyte")
-    lbl_path = os.path.join(ROOT, "neural_net_c", "data", "t10k-labels-idx1-ubyte")
+    img_path = os.path.join(ROOT, "source", "neural-net-c", "data", "t10k-images-idx3-ubyte")
+    lbl_path = os.path.join(ROOT, "source", "neural-net-c", "data", "t10k-labels-idx1-ubyte")
     with open(img_path, "rb") as f:
         magic, count, rows, cols = struct.unpack(">IIII", f.read(16))
         raw = f.read(count * rows * cols)
@@ -533,7 +533,7 @@ def mnist_strip(n=10, cell=64, gap=6):
 
 def mnist_pipeline(cell=104):
     """One drawn stroke walked through the eight preprocessing steps."""
-    img_path = os.path.join(ROOT, "neural_net_c", "data", "t10k-images-idx3-ubyte")
+    img_path = os.path.join(ROOT, "source", "neural-net-c", "data", "t10k-images-idx3-ubyte")
     with open(img_path, "rb") as f:
         struct.unpack(">IIII", f.read(16))
         raw = f.read(784 * 20)

@@ -13,3 +13,18 @@ __pycache__/
 # OS cruft
 Thumbs.db
 .DS_Store
+
+# Secrets / local config (templates: *.example beside each)
+source/firmware-esp8266/osos_gw8266/config.h
+source/config/broker.env
+source/browser-hmi/config.js
+BROKER.md
+*.jks
+*.keystore
+local.properties
+
+# ESP-IDF generated (restored by `idf.py reconfigure` from dependencies.lock)
+source/firmware-esp32-rs485/managed_components/
+source/firmware-esp32-rs485/build/
+source/firmware-esp32-rs485/sdkconfig
+source/firmware-esp32-rs485/sdkconfig.old

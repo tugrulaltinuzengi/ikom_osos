@@ -106,7 +106,7 @@ Legend: ✅ proven · 🟡 code complete, **unproven on real hardware** · ⛔ n
 ### Broker
 | ID | Status | Note |
 |---|---|---|
-| BR-1 | ✅ **on the ESP8266 build** | `firmware8266` runs TLS 1.3 to `nba17802.ala.eu-central-1.emqxsl.com:8883` with `CFG_TLS_INSECURE=0`, verifying the server against a compiled-in DigiCert Global Root G2 anchor. Handshake confirmed on hardware 2026-07-28. The ESP32-S3 build still defaults to `mqtt://broker.emqx.io:1883` — plaintext, anonymous, public — and remains ⛔ |
+| BR-1 | ✅ **on the ESP8266 build** | `firmware8266` runs TLS 1.3 to `your-deployment.emqxsl.com:8883` with `CFG_TLS_INSECURE=0`, verifying the server against a compiled-in DigiCert Global Root G2 anchor. Handshake confirmed on hardware 2026-07-28. The ESP32-S3 build still defaults to `mqtt://broker.emqx.io:1883` — plaintext, anonymous, public — and remains ⛔ |
 | BR-2 | ⛔ | No `gateway`/`headend` split, no ACLs. Both roles share one credential, so the phone and any desktop MQTT client connect as the gateway. **This is now the single weakest point in the system** |
 | BR-3 | ✅ | `config.h` gitignored, real credentials in place, verified by a live broker connection |
 
