@@ -10,6 +10,8 @@ const CFG = {
   username: qs.get("user") ?? CFG0.username ?? "",
   password: qs.get("pass") ?? CFG0.password ?? "",
   gwId:    qs.get("gw")   || CFG0.gwId    || "dkm440-gw1",
+  // protocol v2 modem: tiles then follow the meter profile the gateway publishes
+  modem:   qs.get("modem") || CFG0.modemId || "",
   confMin: parseFloat(qs.get("conf") || CFG0.confMin || 0.90),
   simMin:  parseFloat(qs.get("sim")  || CFG0.simMin  || 0.93),
 };
@@ -20,6 +22,19 @@ const T = {
   cmd:       `osos/${CFG.gwId}/cmd`,
   ack:       `osos/${CFG.gwId}/ack`,
 };
+
+/* ---------------- meter profile (v2 gateways) ---------------- */
+// With a modem configured, the gateway says how to label and group its values
+// (osos/m/<modem>/a/<id>/profile). Without one, or before it arrives, the
+// DKM-440 pages below are used, exactly as before.
+let activeProfile = null;
+const V2 = CFG.modem ? {
+  telemetry: `osos/m/${CFG.modem}/a/+/telemetry`,
+  profile:   `osos/m/${CFG.modem}/a/+/profile`,
+  status:    `osos/m/${CFG.modem}/status`,
+  ack:       `osos/m/${CFG.modem}/ack`,
+  cmd:       `osos/m/${CFG.modem}/cmd`,
+} : null;
 
 /* ---------------- dom ---------------- */
 const $ = id => document.getElementById(id);
@@ -57,13 +72,30 @@ const VIEWS = {
           "MainBus_CosPhi_L1", "MainBus_CosPhi_L2", "MainBus_CosPhi_L3",
           "MainBus_TanPhi_Tot", "MainBus_TanPhi_L1", "MainBus_TanPhi_L2", "MainBus_TanPhi_L3"],
 };
+function currentViews() {
+  if (activeProfile && Array.isArray(activeProfile.registers) && activeProfile.registers.length) {
+    const vs = activeProfile.views && activeProfile.views.length ? activeProfile.views
+      : [{ id: "all", keys: activeProfile.registers.map(r => r.key) }];
+    const out = {};
+    for (const v of vs) out[v.id] = v.keys;
+    return out;
+  }
+  return VIEWS;
+}
+function regOf(key) {
+  return activeProfile && activeProfile.registers ? activeProfile.registers.find(r => r.key === key) : null;
+}
 function unitOf(key) {
+  const r = regOf(key);
+  if (r) return r.unit || "";
   if (key.includes("Voltage")) return "V";
   if (key.includes("Current")) return "A";
   if (key.includes("Freq")) return "Hz";
   return "";
 }
 function shortName(key) {
+  const r = regOf(key);
+  if (r && r.label) return r.label;
   return key.replace("MainBus_", "").replace(/_/g, " ");
 }
 
@@ -72,7 +104,7 @@ let lastTelemetry = null;
 
 function renderTabs() {
   viewtabsEl.innerHTML = "";
-  for (const v of Object.keys(VIEWS)) {
+  for (const v of Object.keys(currentViews())) {
     const b = document.createElement("button");
     b.textContent = v;
     if (v === activeView) b.classList.add("active");
@@ -81,21 +113,31 @@ function renderTabs() {
   }
 }
 function setView(v) {
-  if (!VIEWS[v]) return;
+  if (!currentViews()[v]) return;
   activeView = v;
   renderTabs();
   renderTiles();
 }
 function renderTiles() {
   tilesEl.innerHTML = "";
-  for (const key of VIEWS[activeView]) {
+  if (!currentViews()[activeView]) activeView = Object.keys(currentViews())[0];
+  for (const key of currentViews()[activeView]) {
     const val = lastTelemetry ? lastTelemetry.values?.[key] : undefined;
     const tile = document.createElement("div");
     tile.className = "tile";
     const isNull = val === null || val === undefined;
-    tile.innerHTML = `<div class="k">${shortName(key)}</div>
-      <div class="v${isNull ? " null" : ""}">${isNull ? "—" : Number(val).toFixed(2)}
-      <small>${unitOf(key)}</small></div>`;
+    // textContent, not innerHTML: labels come from the gateway's profile.
+    const k = document.createElement("div");
+    k.className = "k";
+    k.textContent = shortName(key);
+    const v = document.createElement("div");
+    v.className = "v" + (isNull ? " null" : "");
+    const r = regOf(key);
+    v.textContent = isNull ? "—" : Number(val).toFixed(Math.min(2, r && r.decimals !== undefined ? r.decimals : 2));
+    const u = document.createElement("small");
+    u.textContent = " " + unitOf(key);
+    v.appendChild(u);
+    tile.append(k, v);
     tilesEl.appendChild(tile);
   }
   if (lastTelemetry) {
@@ -148,14 +190,23 @@ function connectMqtt() {
   });
   client.on("connect", () => {
     brokerUp = true; updatePill();
-    client.subscribe([T.telemetry, T.status, T.event, T.ack], { qos: 1 });
+    client.subscribe([T.telemetry, T.status, T.event, T.ack].concat(V2 ? [V2.telemetry, V2.profile, V2.status, V2.ack] : []), { qos: 1 });
     logEvent("broker connected");
   });
   client.on("close", () => { brokerUp = false; updatePill(); });
   client.on("error", e => logEvent("mqtt error: " + e.message));
   client.on("message", (topic, payload) => {
+    if (V2 && topic.endsWith("/profile")) {          // retained profile of an analyzer; "" clears it
+      const text = payload.toString().trim();
+      try { activeProfile = text ? JSON.parse(text) : null; } catch { activeProfile = null; }
+      renderTabs(); renderTiles();
+      return;
+    }
     let msg;
     try { msg = JSON.parse(payload.toString()); } catch { return; }
+    if (V2 && /\/a\/[^/]+\/telemetry$/.test(topic)) { lastTelemetry = msg; renderTiles(); return; }
+    if (V2 && topic === V2.status) { gwOnline = msg.state === "online"; updatePill(); return; }
+    if (V2 && topic === V2.ack) { handleAck(msg); return; }
     if (topic === T.telemetry) { lastTelemetry = msg; renderTiles(); }
     else if (topic === T.status) { gwOnline = msg.state === "online"; updatePill(); logEvent("gateway " + msg.state); }
     else if (topic === T.event) { logEvent("event: " + (msg.type || payload)); }
@@ -167,7 +218,7 @@ function connectMqtt() {
 const pendingAcks = new Map(); // id -> timeout handle
 function publishCmd(action, args) {
   const id = "c-" + Date.now().toString(36);
-  client.publish(T.cmd, JSON.stringify({ id, action, args }), { qos: 1 });
+  client.publish(V2 ? V2.cmd : T.cmd, JSON.stringify({ id, action, args }), { qos: 1 });
   showBanner("info", `sent ${action}… waiting for gateway`, 0);
   pendingAcks.set(id, setTimeout(() => {
     pendingAcks.delete(id);
@@ -360,6 +411,8 @@ $("clearbtn").onclick = () => { Pad.clear(); disarm(); };
 
 /* ---------------- boot ---------------- */
 (async () => {
+  const mm = document.getElementById("mapLink");
+  if (mm) mm.href = "meter-map/index.html" + (CFG.modem ? "?modem=" + encodeURIComponent(CFG.modem) : "");
   renderTabs();
   renderTiles();
   try {

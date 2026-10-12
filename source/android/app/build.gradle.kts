@@ -31,6 +31,12 @@ android {
     buildFeatures {
         compose = true
     }
+    sourceSets {
+        // The meter-map window is the browser HMI's page, bundled as-is (see syncMeterMapAssets).
+        getByName("main") {
+            assets.srcDir(layout.buildDirectory.dir("generated/meterMapAssets"))
+        }
+    }
     packaging {
         resources {
             excludes += setOf(
@@ -64,3 +70,13 @@ dependencies {
     testImplementation("org.json:json:20240303")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }
+
+// One copy of the meter-map UI for browser and app: copy it into the APK's assets at
+// build time instead of keeping a second version in src/main/assets.
+val syncMeterMapAssets = tasks.register<Copy>("syncMeterMapAssets") {
+    from("../../browser-hmi/meter-map") {
+        exclude("tests/**", "**/*.md")
+    }
+    into(layout.buildDirectory.dir("generated/meterMapAssets/meter-map"))
+}
+tasks.named("preBuild") { dependsOn(syncMeterMapAssets) }

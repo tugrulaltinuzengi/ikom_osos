@@ -9,6 +9,9 @@ data class Telemetry(
     val meterOk: Boolean,
     val values: Map<String, Double?>,
     val receivedAt: Long,
+    /** Meter profile the gateway read this frame with; "" from firmware that predates profiles. */
+    val profile: String = "",
+    val profileRev: Int = 0,
 )
 
 data class GwStatus(
@@ -99,3 +102,75 @@ fun unitFor(key: String): String = when {
     key.contains("Freq") -> "Hz"
     else -> ""
 }
+
+
+// ---------------------------------------------------------------------------
+// Meter profiles (source/meter-profiles/README.md). The gateway publishes, per
+// analyzer, the profile it reads with; the app only needs the display half of it.
+
+data class ProfileRegister(
+    val key: String,
+    val label: String,
+    val unit: String,
+    val decimals: Int?,
+)
+
+data class ProfileView(val id: String, val label: String, val keys: List<String>)
+
+data class MeterProfile(
+    val id: String,
+    val name: String,
+    val rev: Int,
+    val registers: List<ProfileRegister>,
+    val views: List<ProfileView>,
+) {
+    fun register(key: String): ProfileRegister? = registers.firstOrNull { it.key == key }
+
+    /** The pages to show. A profile without views gets one page with every register. */
+    fun pages(): List<ProfileView> =
+        if (views.isNotEmpty()) views
+        else listOf(ProfileView("all", "all", registers.map { it.key }))
+
+    companion object {
+        /** Null for an empty or unusable payload - which is also how a cleared retained topic arrives. */
+        fun parse(j: org.json.JSONObject): MeterProfile? {
+            val regs = j.optJSONArray("registers") ?: return null
+            val registers = (0 until regs.length()).mapNotNull { i ->
+                val o = regs.optJSONObject(i) ?: return@mapNotNull null
+                val key = o.optString("key")
+                if (key.isEmpty()) return@mapNotNull null
+                ProfileRegister(
+                    key = key,
+                    label = o.optString("label", ""),
+                    unit = o.optString("unit", ""),
+                    decimals = if (o.has("decimals")) o.optInt("decimals") else null,
+                )
+            }
+            if (registers.isEmpty()) return null
+            val vs = j.optJSONArray("views")
+            val views = (0 until (vs?.length() ?: 0)).mapNotNull { i ->
+                val o = vs!!.optJSONObject(i) ?: return@mapNotNull null
+                val ks = o.optJSONArray("keys") ?: return@mapNotNull null
+                val id = o.optString("id")
+                if (id.isEmpty()) return@mapNotNull null
+                ProfileView(id, o.optString("label", id), (0 until ks.length()).map { ks.optString(it) })
+            }
+            return MeterProfile(j.optString("id"), j.optString("name"), j.optInt("rev", 1), registers, views)
+        }
+    }
+}
+
+/** Tile pages for an analyzer: its profile's, else the DKM-440 pages every build has had. */
+fun viewMap(profile: MeterProfile?): Map<String, List<String>> =
+    if (profile == null) VIEWS
+    else profile.pages().associate { it.id to it.keys }
+
+fun labelFor(profile: MeterProfile?, key: String): String =
+    profile?.register(key)?.label?.takeIf { it.isNotEmpty() } ?: shortName(key)
+
+fun unitFor(profile: MeterProfile?, key: String): String =
+    profile?.register(key)?.unit ?: unitFor(key)
+
+/** Digits for a tile: the profile's choice, capped at 3, else 2 as before. */
+fun decimalsFor(profile: MeterProfile?, key: String): Int =
+    (profile?.register(key)?.decimals ?: 2).coerceIn(0, 3)

@@ -35,6 +35,8 @@ import androidx.compose.ui.window.Dialog
 import com.osos.hmi.AppContainer
 import com.osos.hmi.alarms.AlarmRule
 import com.osos.hmi.model.ALL_KEYS
+import com.osos.hmi.model.MeterProfile
+import com.osos.hmi.model.labelFor
 import com.osos.hmi.model.shortName
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -142,7 +144,13 @@ fun AlarmsScreen(c: AppContainer) {
     }
 
     if (adding) {
+        // The registers of the selected analyzer's meter, not only the DKM-440's.
+        val fleetNow by c.fleet.collectAsState()
+        val sel = c.selected.value
+        val profile = sel?.let { fleetNow.analyzer(it.mid, it.aid)?.profile }
         AddRuleDialog(
+            keys = profile?.registers?.map { it.key } ?: ALL_KEYS,
+            profile = profile,
             onSave = { key, min, max, hold ->
                 c.alarms.setRules(
                     rules + AlarmRule(UUID.randomUUID().toString(), key, min, max, hold, true)
@@ -155,8 +163,13 @@ fun AlarmsScreen(c: AppContainer) {
 }
 
 @Composable
-private fun AddRuleDialog(onSave: (String, Double, Double, Int) -> Unit, onClose: () -> Unit) {
-    var key by remember { mutableStateOf(ALL_KEYS.first()) }
+private fun AddRuleDialog(
+    keys: List<String>,
+    profile: MeterProfile?,
+    onSave: (String, Double, Double, Int) -> Unit,
+    onClose: () -> Unit,
+) {
+    var key by remember { mutableStateOf(keys.first()) }
     var menuOpen by remember { mutableStateOf(false) }
     var minText by remember { mutableStateOf("207") }
     var maxText by remember { mutableStateOf("253") }
@@ -168,11 +181,11 @@ private fun AddRuleDialog(onSave: (String, Double, Double, Int) -> Unit, onClose
                 Text("New alarm rule", style = MaterialTheme.typography.titleMedium)
 
                 Box {
-                    OutlinedButton(onClick = { menuOpen = true }) { Text(shortName(key)) }
+                    OutlinedButton(onClick = { menuOpen = true }) { Text(labelFor(profile, key)) }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        ALL_KEYS.forEach { k ->
+                        keys.forEach { k ->
                             DropdownMenuItem(
-                                text = { Text(shortName(k)) },
+                                text = { Text(labelFor(profile, k)) },
                                 onClick = {
                                     key = k
                                     menuOpen = false

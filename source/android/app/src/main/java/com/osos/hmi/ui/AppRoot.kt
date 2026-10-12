@@ -40,6 +40,16 @@ import com.osos.hmi.AppContainer
 
 @Composable
 fun AppRoot(c: AppContainer) {
+    val mapOpen by c.meterMapOpen.collectAsState()
+    if (mapOpen) {
+        MeterMapScreen(c, onClose = { c.meterMapOpen.value = false })
+    } else {
+        MainScaffold(c)
+    }
+}
+
+@Composable
+private fun MainScaffold(c: AppContainer) {
     val tab by c.uiTab.collectAsState()
     val connected by c.client.connected.collectAsState()
     val fleetNow by c.fleet.collectAsState()

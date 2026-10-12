@@ -43,3 +43,10 @@ def test_reserved_m_segment_is_not_legacy():
 
 def test_parse_rejects_foreign_prefix():
     assert p.parse("other/m/gw-01/status")[0] == "unknown"
+
+
+def test_profile_topics():
+    assert p.modem_topic("gw-01", "profiles") == "osos/m/gw-01/profiles"
+    assert p.analyzer_topic("gw-01", "an-01", "profile") == "osos/m/gw-01/a/an-01/profile"
+    assert p.parse("osos/m/gw-01/profiles") == ("modem", "gw-01", None, "profiles")
+    assert p.parse("osos/m/gw-01/a/an-01/profile") == ("analyzer", "gw-01", "an-01", "profile")

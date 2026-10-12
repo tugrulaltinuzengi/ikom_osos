@@ -38,3 +38,13 @@ class SubscriptionPolicyTest {
         assertTrue("osos/+/telemetry" in closed)
     }
 }
+
+class ProfileSubscriptionTest {
+    // Meter profiles say how to label every analyzer's values, so they are held for the
+    // whole fleet (they are retained and tiny), regardless of which modem is open.
+    @Test fun profilesAreAlwaysOn() {
+        val f = SubscriptionPolicy().filters()
+        assertTrue("osos/m/+/profiles" in f)
+        assertTrue("osos/m/+/a/+/profile" in f)
+    }
+}

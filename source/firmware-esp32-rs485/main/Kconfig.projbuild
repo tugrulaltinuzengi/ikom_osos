@@ -27,6 +27,29 @@ menu "OSOS Gateway Configuration"
         string "MQTT password"
         default ""
 
+    config OSOS_PROTOCOL_V2
+        bool "Protocol v2 topics (osos/m/{gw}/...)"
+        default n
+        help
+            Needed for the app's and the browser's Meter map window to manage this
+            gateway (profile upload, test read). The topics change from
+            osos/{gw}/... to osos/m/{gw}/..., so point the app at the new ones.
+            Off keeps the v1 topics exactly as before; profiles can still be
+            uploaded with the same commands on osos/{gw}/cmd.
+
+    config OSOS_ANALYZER_ID
+        string "Analyzer id of the RS-485 meter (protocol v2)"
+        default "an-01"
+        depends on OSOS_PROTOCOL_V2
+
+    config OSOS_BUFFER_FRAMES
+        int "Offline telemetry buffer (frames)"
+        range 16 512
+        default 192
+        help
+            Each frame holds up to 48 register values (~410 B). 192 frames is
+            ~78 KB of RAM, ~16 minutes offline at 5 s.
+
     config OSOS_SIM_MODE
         bool "Simulate meter values (no Modbus hardware needed)"
         default y

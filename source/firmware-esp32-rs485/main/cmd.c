@@ -9,6 +9,8 @@
 #include "app_config.h"
 #include "cmd.h"
 #include "gw_mqtt.h"
+#include "meter.h"
+#include "profile.h"
 
 static const char *TAG = "cmd";
 
@@ -43,6 +45,27 @@ void cmd_handle(const char *data, int len)
     ESP_LOGI(TAG, "cmd %s: %s", id, action);
 
     char detail[96];
+    // Meter profiles: upload, delete, test read. Same commands and ack texts as the
+    // ESP8266 gateway (profile.c / profile_store.h), so one UI manages both.
+    profile_result_t pr = profile_handle(action, args);
+    if (pr.handled) {
+        bool ok = pr.ok;
+        snprintf(detail, sizeof detail, "%s", pr.detail);
+        if (pr.ok && pr.want_test) {
+            uint8_t words = pr.test_raw_words ? pr.test_raw_words : osos_type_words(pr.test_reg.type);
+            uint16_t w[8] = { 0 };
+            if (meter_read_raw(pr.test_reg.fc, pr.test_reg.address, words, w)) {
+                profile_describe_test(&pr, w, words, detail, sizeof detail);
+            } else {
+                ok = false;
+                snprintf(detail, sizeof detail, "read failed (no answer from the meter)");
+            }
+        }
+        ack(id, ok, detail);
+        if (pr.ok && pr.changed) app_profile_changed();
+        cJSON_Delete(root);
+        return;
+    }
     if (!strcmp(action, "read_now")) {
         xEventGroupSetBits(app_events, BIT_READ_NOW);
         ack(id, true, "reading now");

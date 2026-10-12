@@ -49,3 +49,15 @@ class TopicRouterTest {
     @Test fun rejectsUnknownLeaf() =
         assertTrue(TopicRouter.parse("osos/m/gw-01/bogus") is Route.Unknown)
 }
+
+class ProfileRoutesTest {
+    @Test fun parsesProfileTopics() {
+        assertEquals(Route.ModemProfiles("gw-01"), TopicRouter.parse("osos/m/gw-01/profiles"))
+        assertEquals(Route.AnalyzerProfile("gw-01", "an-02"), TopicRouter.parse("osos/m/gw-01/a/an-02/profile"))
+    }
+
+    @Test fun buildsThemBack() {
+        assertEquals("osos/m/gw-01/a/an-02/profile", TopicRouter.analyzer("gw-01", "an-02", "profile"))
+        assertEquals("osos/m/+/a/+/profile", TopicRouter.allAnalyzerProfiles())
+    }
+}

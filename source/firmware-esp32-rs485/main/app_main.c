@@ -2,6 +2,7 @@
 // The PC-free runtime of the osos_emu project; protocol identical to
 // tools/fake_gateway.py (the PC reference implementation).
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include "cJSON.h"
@@ -20,6 +21,7 @@
 #include "gw_mqtt.h"
 #include "http_ui.h"
 #include "meter.h"
+#include "profile.h"
 #include "wifi_sta.h"
 
 static const char *TAG = "app";
@@ -65,9 +67,15 @@ static uint32_t s_seq = 0;
 
 static void frame_capture(telem_frame_t *f)
 {
-    float vals[METER_NUM_REGS];
-    bool ok[METER_NUM_REGS];
-    bool any = meter_read_all(vals, ok);
+    // The profile is read here and replaced by the MQTT task: hold its lock for the
+    // whole sweep so the register list cannot change underneath it.
+    static osos_poll_result_t res;          // 48 doubles + flags: too big for the task stack
+    profile_lock();
+    meter_poll(&res);
+    f->generation = profile_generation();
+    int n = profile_count();
+    profile_unlock();
+    bool any = res.ok_count > 0;
 
     static bool was_ok = true;
     if (was_ok && !any) {
@@ -81,30 +89,68 @@ static void frame_capture(telem_frame_t *f)
     f->seq = ++s_seq;
     f->meter_ok = any;
     f->ok_mask = 0;
-    for (int i = 0; i < METER_NUM_REGS; i++) {
-        if (ok[i]) f->ok_mask |= 1u << i;
-        f->vals[i] = vals[i];
+    for (int i = 0; i < n; i++) {
+        if (res.ok[i]) f->ok_mask |= (uint64_t)1 << i;
+        f->vals[i] = res.value[i];
     }
+}
+
+// The retained analyzer status (protocol v2), republished when it changes.
+static void publish_analyzer_status(bool meter_ok, const char *ts)
+{
+#if CONFIG_OSOS_PROTOCOL_V2
+    static int last_state = -1;
+    static uint32_t last_gen;
+    uint32_t gen = profile_generation();
+    if (last_state == (int)meter_ok && last_gen == gen) return;
+    last_state = (int)meter_ok;
+    last_gen = gen;
+    char json[220];
+    snprintf(json, sizeof json,
+             "{\"v\":2,\"state\":\"%s\",\"host\":\"rs485\",\"unit\":%d,\"last_ok\":\"%s\","
+             "\"fail_streak\":0,\"profile\":\"%s\"}",
+             meter_ok ? "online" : "fault", CONFIG_OSOS_MB_SLAVE_ID, ts, profile_id());
+    gw_publish("astatus", json, 1, true);
+#else
+    (void)meter_ok; (void)ts;
+#endif
 }
 
 static void publish_frame(const telem_frame_t *f, bool buffered)
 {
+    // Register names come from the profile that captured this frame. If another has
+    // taken over since, the frame no longer fits it: drop it rather than mislabel it.
+    profile_lock();
+    if (f->generation != profile_generation()) {
+        profile_unlock();
+        return;
+    }
+    const osos_reg_t *regs = profile_regs();
+    int n = profile_count();
     cJSON *root = cJSON_CreateObject();
     char ts[24];
     iso_from((time_t)f->epoch, ts, sizeof ts);
+#if CONFIG_OSOS_PROTOCOL_V2
+    cJSON_AddNumberToObject(root, "v", 2);
+#endif
     cJSON_AddStringToObject(root, "ts", ts);
     cJSON_AddNumberToObject(root, "seq", f->seq);
     cJSON_AddBoolToObject(root, "buffered", buffered);
+    cJSON_AddStringToObject(root, "profile", profile_id());
+    cJSON_AddNumberToObject(root, "profile_rev", profile_header()->rev);
     cJSON *values = cJSON_AddObjectToObject(root, "values");
-    for (int i = 0; i < METER_NUM_REGS; i++) {
-        if (f->ok_mask & (1u << i)) {
-            float v = f->vals[i];
-            cJSON_AddNumberToObject(values, METER_REGS[i].name,
-                                    ((int)(v * 100 + (v >= 0 ? 0.5 : -0.5))) / 100.0);
+    for (int i = 0; i < n; i++) {
+        if (f->ok_mask & ((uint64_t)1 << i)) {
+            // Printed with the register's own decimals, as raw JSON: cJSON's own number
+            // printing would show 1234567.8900000001.
+            char num[40];
+            osos_format(f->vals[i], regs[i].decimals, num, sizeof num);
+            cJSON_AddRawToObject(values, regs[i].key, num);
         } else {
-            cJSON_AddNullToObject(values, METER_REGS[i].name);
+            cJSON_AddNullToObject(values, regs[i].key);
         }
     }
+    profile_unlock();
     cJSON_AddBoolToObject(root, "meter_ok", f->meter_ok);
     char *json = cJSON_PrintUnformatted(root);
     if (json) {
@@ -112,6 +158,57 @@ static void publish_frame(const telem_frame_t *f, bool buffered)
         cJSON_free(json);
     }
     cJSON_Delete(root);
+    if (!buffered) publish_analyzer_status(f->meter_ok, ts);
+}
+
+// ---- meter profile publishing -------------------------------------------------
+// Retained `profile` (the profile JSON, verbatim, so any app can label the values and
+// edit the profile) and `profiles` (what is stored, limits).
+void app_publish_profile(void)
+{
+    int size = profile_blob_size();
+    if (size > 0) {
+        char *buf = malloc((size_t)size + 1);
+        if (buf && profile_blob_read(0, (uint8_t *)buf, (size_t)size) == size) {
+            buf[size] = 0;
+            gw_publish("profile", buf, 1, true);
+        }
+        free(buf);
+    } else {
+        gw_publish("profile", "", 1, true);          // clears the retained copy
+    }
+    cJSON *doc = cJSON_CreateObject();
+    cJSON_AddNumberToObject(doc, "v", 2);
+    cJSON *arr = cJSON_AddArrayToObject(doc, "profiles");
+    cJSON *it = cJSON_CreateObject();
+    cJSON_AddStringToObject(it, "id", profile_id());
+    cJSON_AddNumberToObject(it, "rev", profile_header()->rev);
+    cJSON_AddNumberToObject(it, "n", profile_count());
+    cJSON_AddStringToObject(it, "name", profile_header()->name);
+    if (profile_is_builtin()) cJSON_AddTrueToObject(it, "builtin");
+    cJSON_AddItemToArray(arr, it);
+#if CONFIG_OSOS_PROTOCOL_V2
+    cJSON *as = cJSON_AddObjectToObject(doc, "assign");
+    cJSON_AddStringToObject(as, CONFIG_OSOS_ANALYZER_ID, profile_id());
+#endif
+    cJSON *cap = cJSON_AddObjectToObject(doc, "cap");
+    cJSON_AddNumberToObject(cap, "regs", OSOS_MAX_REGS);
+    cJSON_AddNumberToObject(cap, "profiles", 1);
+    cJSON_AddNumberToObject(cap, "blob", PROFILE_MAX_BLOB);
+    char *json = cJSON_PrintUnformatted(doc);
+    if (json) {
+        gw_publish("profiles", json, 1, true);
+        cJSON_free(json);
+    }
+    cJSON_Delete(doc);
+}
+
+void app_profile_changed(void)
+{
+    buf_clear();                                      // queued frames belong to the old profile
+    app_publish_profile();
+    gw_publish("event", "{\"type\":\"profile_changed\"}", 1, false);
+    xEventGroupSetBits(app_events, BIT_READ_NOW);     // first frame under the new profile, now
 }
 
 // Flush the offline backlog oldest-first, paced so the esp-mqtt QoS-1 outbox
@@ -194,6 +291,8 @@ void app_main(void)
     }
     app_events = xEventGroupCreate();
     report_interval_load();
+    profile_nvs_init();
+    profile_init();
 
     const char *ip = wifi_sta_start();
     start_mdns();

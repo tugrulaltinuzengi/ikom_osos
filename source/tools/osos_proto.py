@@ -5,8 +5,8 @@ android/.../mqtt/TopicRouter.kt and the firmware counterpart is
 firmware8266/osos_gw8266/commands.h - all three must agree.
 
 Topic grammar:
-    osos/m/{mid}/{status|registry|state|event|cmd|ack|labels}
-    osos/m/{mid}/a/{aid}/{telemetry|status}
+    osos/m/{mid}/{status|registry|state|event|cmd|ack|labels|profiles}
+    osos/m/{mid}/a/{aid}/{telemetry|status|profile}
     osos/tree
     osos/{gwId}/{telemetry|status|event|ack}      <- legacy v1, gwId != "m"
 
@@ -20,10 +20,14 @@ ROOT = "osos"
 MODEM_SEG = "m"
 ANALYZER_SEG = "a"
 
+# `profiles` (retained): the meter profiles a modem has stored and which analyzer
+# reads with which. `profile` (retained, per analyzer): the profile JSON the
+# analyzer is read with, so any app can label its values. Added in protocol v2.1,
+# purely additive: older apps never subscribe to either.
 MODEM_LEAVES = frozenset(
-    {"status", "registry", "state", "event", "cmd", "ack", "labels"}
+    {"status", "registry", "state", "event", "cmd", "ack", "labels", "profiles"}
 )
-ANALYZER_LEAVES = frozenset({"telemetry", "status"})
+ANALYZER_LEAVES = frozenset({"telemetry", "status", "profile"})
 LEGACY_LEAVES = frozenset({"telemetry", "status", "event", "ack", "cmd"})
 
 TREE_TOPIC = f"{ROOT}/tree"

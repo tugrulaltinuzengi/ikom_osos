@@ -1,6 +1,7 @@
 package com.osos.hmi.data
 
 import com.osos.hmi.model.GwStatus
+import com.osos.hmi.model.MeterProfile
 import com.osos.hmi.model.ModemState
 import com.osos.hmi.model.Telemetry
 import com.osos.hmi.mqtt.Protocol
@@ -20,6 +21,8 @@ data class AnalyzerEntry(
     /** True if the modem's registry listed it. Telemetry-discovered analyzers
      *  are not in any registry and must survive a registry update. */
     val fromRegistry: Boolean = false,
+    /** How this analyzer's values are labelled and grouped; null until the gateway publishes it. */
+    val profile: MeterProfile? = null,
 )
 
 data class ModemEntry(
@@ -30,6 +33,8 @@ data class ModemEntry(
     val protocolVersion: Int = Protocol.VERSION,
     val unsupportedVersion: Boolean = false,
     val loadChannels: Int = 0,
+    /** The retained `profiles` listing, as published (stored profiles, assignments, limits). */
+    val profiles: org.json.JSONObject? = null,
 )
 
 /**
@@ -84,6 +89,12 @@ data class Fleet(
         is Route.ModemLabels -> reduceLabels(route.mid, json)
         is Route.AnalyzerTelemetry -> upsertAnalyzer(route.mid, route.aid) {
             it.copy(latest = parseTelemetry(json))
+        }
+        is Route.AnalyzerProfile -> upsertAnalyzer(route.mid, route.aid) {
+            it.copy(profile = MeterProfile.parse(json))
+        }
+        is Route.ModemProfiles -> upsert(route.mid) {
+            it.copy(profiles = json.takeIf { j -> j.length() > 0 })
         }
         is Route.AnalyzerStatus -> upsertAnalyzer(route.mid, route.aid) {
             it.copy(link = json.optString("state", "?"))
@@ -180,6 +191,8 @@ data class Fleet(
             meterOk = j.optBoolean("meter_ok", false),
             values = values,
             receivedAt = System.currentTimeMillis(),
+            profile = j.optString("profile", ""),
+            profileRev = j.optInt("profile_rev", 0),
         )
     }
 }

@@ -77,6 +77,16 @@ class AppContainer(app: Application) {
     /** Modem owning the selected analyzer — the target for its commands. */
     fun selectedMid(): String? = selected.value?.mid
 
+    /** Retained fleet topics (registry, status, profiles), by topic, as received. The meter-map
+     *  page asks for these when it opens: MQTT will not redeliver what we already hold. */
+    val retained = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** The open meter-map page's inbox, or null when it is closed. */
+    @Volatile var mapSink: ((topic: String, text: String) -> Unit)? = null
+
+    /** Whether the meter-map window is showing in place of the tab bar. */
+    val meterMapOpen = MutableStateFlow(false)
+
     /** Modem the Monitor currently has open, if any. */
     val openModem = MutableStateFlow<String?>(null)
 
@@ -140,6 +150,7 @@ class AppContainer(app: Application) {
         scope.launch {
             client.messages.collect { (topic, json) ->
                 val route = TopicRouter.parse(topic)
+                forwardToMeterMap(route, topic, json)
                 if (route is Route.Tree) { tree.applyTree(json); return@collect }
                 val next = fleet.value.reduce(route, json)
                 fleet.value = next
@@ -181,6 +192,22 @@ class AppContainer(app: Application) {
 
         log("app", "net ${mlp.archLabel} loaded, ${digitMap.value.size} digit commands")
         client.connect(prefs.brokerConfig())
+    }
+
+    /** Hand the meter-map page what it needs, and remember the retained part for late openers. */
+    private fun forwardToMeterMap(route: Route, topic: String, json: JSONObject) {
+        val cleared = json.length() == 0
+        when (route) {
+            is Route.ModemRegistry, is Route.ModemStatus, is Route.ModemProfiles,
+            is Route.AnalyzerProfile, is Route.AnalyzerStatus -> {
+                if (cleared) retained.remove(topic) else retained[topic] = json.toString()
+            }
+            else -> Unit
+        }
+        val relevant = route is Route.ModemRegistry || route is Route.ModemStatus ||
+            route is Route.ModemProfiles || route is Route.AnalyzerProfile ||
+            route is Route.AnalyzerStatus || route is Route.ModemAck || route is Route.AnalyzerTelemetry
+        if (relevant) mapSink?.invoke(topic, if (cleared) "" else json.toString())
     }
 
     // config/commands.json (bundled asset): { "digits": { "0": {scope, action, args, label} } }

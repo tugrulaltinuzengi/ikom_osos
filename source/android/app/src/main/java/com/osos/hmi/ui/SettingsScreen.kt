@@ -55,6 +55,10 @@ fun SettingsScreen(c: AppContainer) {
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        Button(onClick = { c.meterMapOpen.value = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("Meter map — register maps for other meters…")
+        }
+
         Text("Broker", style = MaterialTheme.typography.titleSmall)
         
         OutlinedTextField(

@@ -4,6 +4,7 @@ window.OSOS_CONFIG = {
   wssUrl: "wss://broker.emqx.io:8084/mqtt", // browser connection to the broker
   username: "",                             // empty = anonymous (playground only)
   password: "",
-  gwId: "dkm440-gw1",
+  gwId: "dkm440-gw1",                      // protocol v1 single gateway
+  modemId: "",                              // protocol v2 modem, e.g. "gw-01": tiles then follow the meter profile
   confMin: 0.90,                            // below this the drawing is rejected
 };

@@ -78,10 +78,13 @@ and not in the phone. Flip **Master sleep** and watch the modems report `ASLEEP`
 |---|---|
 | `app/` | `osos-hmi-0.3.1.apk` — install and run |
 | `presentation/` | the delivery talk, plus the Python that generates it |
-| `source/android/` | the Kotlin / Jetpack Compose app, with its 41 unit tests |
+| `source/android/` | the Kotlin / Jetpack Compose app, with its 49 unit tests |
 | `source/firmware-esp8266/` | **the gateway that runs** — Modbus TCP, Arduino |
 | `source/firmware-esp32-rs485/` | the earlier ESP-IDF / RS-485 build, for reference |
 | `source/browser-hmi/` | the same HMI as a web page — no install |
+| `source/browser-hmi/meter-map/` | the **Meter map** window: edit a meter profile, read one out of a manual (Word / PDF / Excel / CSV), send it to a gateway. The Android app shows this same page |
+| `source/meter-profiles/` | the meter profile format, the DKM-440 as a profile, examples, and the cross-language test vectors |
+| `source/firmware-common/` | the C codec both gateways use to turn a profile into values |
 | `source/tools/` | protocol module, fleet simulator, command CLI |
 | `source/neural-net-c/` | the neural network in C, from scratch, with MNIST data |
 | `source/modbus-mapping/` | how an undocumented register map was derived |
@@ -137,6 +140,8 @@ osos/m/{mid}/cmd   ->   /ack                      the command downlink
 osos/m/{mid}/event                                sleep enter/exit, load switch
 osos/m/{mid}/a/{aid}/telemetry                    the 22 measured values
 osos/m/{mid}/a/{aid}/status      retained         per-analyzer link state
+osos/m/{mid}/a/{aid}/profile     retained         the meter profile this analyzer is read with
+osos/m/{mid}/profiles            retained         stored profiles, who uses which, limits
 osos/m/{mid}/labels              retained         names + folders         (APP writes)
 osos/tree                        retained         folder definitions      (APP writes)
 
@@ -147,7 +152,12 @@ osos/{gwId}/telemetry                             legacy v1, still rendered
 stable machine ids that never change once assigned.
 
 **Commands:** `ping`, `read_now{analyzer}`, `set_interval{seconds}`,
-`sleep{on}`, `load{ch,on}`.
+`sleep{on}`, `load{ch,on}`, and the meter-profile commands `profile_begin`,
+`profile_regs`, `profile_meta`, `profile_commit`, `profile_assign`,
+`profile_delete`, `profile_list`, `profile_test` (see section 6).
+
+Telemetry frames gained `profile` and `profile_rev`; nothing was removed or
+renamed, so apps that predate profiles keep working unchanged.
 
 ### Watching one meter at a time
 
@@ -216,8 +226,8 @@ blinded the gateway — `CFG_ANALYZERS` is compile-time, so a moved meter means
 rescan and reflash. **Reserve the address.**
 
 Word order is **big-endian** (`0x41D4 0000` decodes to 26.5). The meter tarpits
-a master that fires requests back to back, so `kReadGapMs = 30` in `meter_map.h`
-preserves the gap — removing it makes reads fail intermittently.
+a master that fires requests back to back, so `timing.read_gap_ms = 30` in
+`meter-profiles/dkm440.json` preserves the gap — removing it makes reads fail intermittently.
 
 Phase voltages read `0.000` on the bench because it is a True-RMS **AC** meter
 with nothing on its voltage inputs. That is correct, not a fault.
@@ -367,22 +377,73 @@ be able to fabricate a meter reading.
 |---|---|
 | an analyzer | one line in `CFG_ANALYZERS`, reflash |
 | a modem | a different `CFG_MODEM_ID`, its own broker user |
-| a different meter | a new `meter_map.h` |
+| **a different meter** | **a meter profile — no reflash, no app rebuild** |
 
-No topic changes, no app rebuild, no migration in any of those cases. A new
-analyzer appears in the tree the moment the modem republishes its registry —
+A new analyzer appears in the tree the moment the modem republishes its registry —
 named `an-02` until someone names it properly from the phone.
 
-**For a meter whose register map you do not have**, the method used to derive
-the DKM-440's is written down and repeatable: `source/modbus-mapping/METHOD.md`.
-Scan, record, and fit candidate registers against known values by least squares.
-That method is arguably worth more than the map it produced.
+### A different meter: the Meter map window
+
+What registers to read and how to decode them is a **meter profile**, a JSON
+document (`source/meter-profiles/README.md` is the format). The DKM-440 is built
+into the gateway and is just one profile; others are uploaded and kept in the
+gateway's flash. A profile can describe:
+
+- holding (03) or input (04) registers
+- 16/32/64-bit integers (signed or not) and 32/64-bit floats
+- all four 32-bit byte layouts (ABCD, CDAB, BADC, DCBA)
+- a scale and an offset per register, units, labels, tile pages for the app
+- how requests are paced and merged, so a meter that dislikes being hammered, and
+  one that reads 16 registers in one go, are both handled
+
+Open **Settings → Meter map** in the app, or `source/browser-hmi/meter-map/` in a
+browser (the HMI page links to it). It has four tabs:
+
+1. **Profile** — edit the profile. Each register has a **Test** button that reads it
+   from the selected analyzer and shows the raw words next to the decoded value, which
+   is how you settle a wrong word order or scale in seconds.
+2. **Import** — upload the meter's manual: **Word (.docx), Excel (.xlsx), PDF or CSV**.
+   The register table is found, addresses, types, scales and units are read (English and
+   Turkish headers, `4xxxx` notation, hex, `x10` / `/10` / `0.1`), and you get a review
+   table where every row says how sure it is and why. Nothing is used until you accept it.
+   The file is read on the device; nothing is uploaded anywhere.
+3. **Gateway** — what the gateway holds, send the profile, choose which analyzer reads
+   with it. Every step of an upload is acknowledged; the first refusal stops it and the
+   gateway keeps the profile it had.
+4. **Live** — the analyzer's values, labelled from the profile.
+
+The same from a terminal: `source/tools/profile_tool.py validate | push | list | assign |
+test | delete`.
+
+**What import can and cannot do.** It reads text tables. A scanned PDF (a picture of a
+page) has no text and is refused with a message; run OCR first. Manuals that describe
+registers in running prose rather than a table are not understood. Where a manual is
+silent — word order, whether addresses count from 1, whether a bare `10` multiplies or
+divides — the draft says it guessed. Always **Test** a few registers before relying on
+a profile.
+
+**For a meter whose register map you do not have**, the method used to derive the
+DKM-440's is written down and repeatable: `source/modbus-mapping/METHOD.md`. Scan,
+record, and fit candidate registers against known values by least squares. (Its scale
+convention is the inverse of a profile's: there `raw = scale × value`, in a profile
+`value = raw × scale + offset`.)
 
 ### What is already vendor-neutral
 
-The topic grammar, the gateway and the app are not specific to this meter. Only
-`meter_map.h` is. Any Modbus TCP field device can go behind this gateway in about
-a day once its map is known.
+The topic grammar, the gateway, the app and the profile format are not specific to
+any meter. The gateway reads Modbus TCP (ESP8266) or RS-485 (ESP32); other transports
+would need their own reader.
+
+**Limits, and why.** 48 registers per profile, 6 stored profiles per ESP8266, 8 KB of
+display metadata: the ESP8266 has about 25 KB of heap once TLS is up, so a profile is
+streamed to flash in small acknowledged pieces and read into RAM only while polling.
+A sweep stops after 8 seconds, and `timeout × (retries + 1)` may not exceed 8 seconds,
+so a slow meter cannot cost the gateway its MQTT connection.
+
+**ESP32 build.** It reads profiles too (`source/firmware-esp32-rs485/`, one stored
+profile in its own NVS partition). To manage it from the Meter map window turn on
+`OSOS_PROTOCOL_V2` in menuconfig, which switches its topics to the `osos/m/...` scheme;
+the default stays the original `osos/{gw}/...`.
 
 ### Wiring the fleet into IKOM Data Manager
 
@@ -434,7 +495,7 @@ customer site.
 - `load` is absent from the bindable actions, so no drawn symbol can switch a
   relay
 
-41 unit tests cover the topic grammar, the subscription policy, the fleet
+49 unit tests cover the topic grammar, meter profiles, the subscription policy, the fleet
 reducer and the alarm mute gate. They run with no device.
 
 ### Written and compiles, but has never executed
@@ -448,10 +509,50 @@ per-analyzer read, sleep and wake, and load switching.
 Until then the previous firmware keeps working and the app keeps rendering it as
 a v1 gateway. Rollback is a `git checkout` of the firmware folder plus a reflash.
 
+### Meter profiles — what has and has not been verified
+
+Checked by running code:
+
+- the decoder (8 types, 4 byte layouts, scale/offset, NaN handling), the request
+  merging, the polling rules, the profile validator and the whole upload protocol —
+  including its refusals — give identical results in **Python, JavaScript and C++**,
+  because all three run the same `source/meter-profiles/vectors.json`. The C++ run
+  executes the real firmware code on a PC (`source/firmware-esp8266/tests`, 289 checks,
+  address and undefined-behaviour sanitizers on); the ESP32 profile store likewise
+  (`source/firmware-esp32-rs485/tests`, 78 checks)
+- the ESP8266 sketch **compiles** with `-Wall -Wextra` and no warnings against the
+  real ESP8266 core 3.1.2 (object compile; static RAM +4.4 KB)
+- the Meter map page, in headless Chromium against an in-memory gateway: loading a
+  profile, editing and validation, test reads, importing the sample Word / PDF / Excel /
+  CSV files, sending with progress and a refused step, live tiles, and that markup in
+  names is never interpreted (`browser-hmi/meter-map/tests/ui_smoke.js`)
+- document import against sample documents in English and Turkish (`tests/importer.test.js`)
+- the Kotlin model, fleet reducer and topic code (49 JVM tests)
+- the PC fleet simulator behaves like the firmware, so the whole chain can be tried
+  with `fake_fleet.py`
+
+**Not done, and it matters:**
+
+- **no hardware run.** None of the new firmware has executed on a board. The profile
+  commands, the flash storage (LittleFS on the ESP8266, NVS on the ESP32) and a real
+  non-DKM meter are all untested on hardware
+- **the Android UI was not compiled or run.** The Compose screens, the WebView
+  bridge and the Gradle asset step could not be built here (no Android SDK). The pure
+  Kotlin logic is tested; the screens are written to the existing patterns but unproven.
+  `app/osos-hmi-0.3.1.apk` is the old build: it keeps working against new firmware
+  (it ignores the profile topics) but has no Meter map window and shows
+  DKM-440 names. Rebuild the app to get them
+- **the ESP32 firmware was not compiled** (no ESP-IDF here), only its profile store
+- **import accuracy on real manuals** is unknown beyond the sample documents. Expect
+  to correct some rows; the review table exists for that
+- the SDM630 example follows Eastron's published register table from memory of that
+  table, not from a unit on the bench
+
 ### Open, and said so
 
 - **broker role separation** — section 5, specified and not applied
-- **store-and-forward** — `buffered` is always `false`
+- **store-and-forward** — `buffered` is always `false` on the ESP8266 (the ESP32 build
+  has it, now with up to 48 registers per frame)
 - **awake-versus-asleep current** — never measured, so no figure is quoted
   anywhere. Station mode already defaults to modem sleep, so part of the saving
   is banked before this change and the honest result may be smaller than

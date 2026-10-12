@@ -145,7 +145,10 @@ class GatewayClient(
             .callback { pub ->
                 val topic = pub.topic.toString()
                 try {
-                    val json = JSONObject(String(pub.payloadAsBytes))
+                    // An empty payload is a cleared retained topic (a profile that was
+                    // removed). Pass it on as {} so the reducer can clear its copy.
+                    val raw = String(pub.payloadAsBytes)
+                    val json = if (raw.isBlank()) JSONObject() else JSONObject(raw)
                     if (TopicRouter.parse(topic) is Route.ModemAck) handleAck(json)
                     messages.tryEmit(topic to json)
                 } catch (e: Exception) {

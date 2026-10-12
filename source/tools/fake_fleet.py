@@ -9,6 +9,7 @@ demonstrates 25 analyzers per modem - a scale the ESP8266 build is capped below
 import argparse
 import json
 import math
+import os
 import random
 import threading
 import time
@@ -16,9 +17,11 @@ from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 
+import meterprofile as mp
 import osos_proto as p
 
 LOAD_CHANNELS = 4
+PROFILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "meter-profiles")
 SLEEP_INTERVAL_S = 300
 
 
@@ -42,6 +45,27 @@ def sim_values(t, drift):
     return v
 
 
+def sim_reg_value(reg, t, drift):
+    """A plausible reading for any register, chosen by its unit. DKM-440 keys keep
+    the values the app has always seen (sim_values above)."""
+    def wob(base, amp):
+        return base + amp * math.sin(t / 30 + drift) + random.uniform(-amp / 3, amp / 3)
+    unit = reg.get("unit", "")
+    if unit == "V":
+        return wob(230, 1.5)
+    if unit == "A":
+        return wob(4.2, 0.4)
+    if unit == "Hz":
+        return wob(50, 0.02)
+    if unit in ("W", "VA", "var"):
+        return wob(3800, 200)
+    if unit == "kWh":
+        return 1234.5 + (t % 100000) / 3600 * 3.8
+    if unit == "C":
+        return wob(25, 2)
+    return wob(0.92, 0.02)
+
+
 def now_iso():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -60,6 +84,34 @@ class Modem:
              "port": 502, "unit": 1, "interval": interval}
             for i in range(n_analyzers)
         ]
+        # Same profile storage and commands as the firmware (meterprofile.GatewaySim).
+        self.gw = mp.GatewaySim(mp.load_profile(os.path.join(PROFILES_DIR, "dkm440.json")),
+                                [a["id"] for a in self.analyzers])
+
+    def virtual_meter(self, aid, t, drift):
+        """Registers of the meter behind `aid`, as the profile says they are laid out."""
+        prof = self.gw.profile_for(aid)
+        mem = {}
+        legacy = sim_values(t, drift) if prof["profile"]["id"] == "dkm440" else {}
+        for r in prof["regs"]:
+            val = legacy.get(r["key"], None)
+            if val is None:
+                val = sim_reg_value(next((x for x in prof["profile"]["registers"]
+                                          if x["key"] == r["key"]), {}), t, drift)
+            for k, w in enumerate(mp.encode_value(val, r["type"], r["word_order"],
+                                                  r["byte_order"], r["scale"], r["offset"])):
+                mem[(r["fc"], r["address"] + k)] = w
+        return mem
+
+    def meter_reader(self, aid, t=None, drift=None):
+        t = time.time() if t is None else t
+        drift = hash(aid) % 100 / 10.0 if drift is None else drift
+        mem = self.virtual_meter(aid, t, drift)
+
+        def read(fc, start, words):
+            got = [mem.get((fc, start + i)) for i in range(words)]
+            return None if None in got else got
+        return read
 
     def status_payload(self):
         return {"v": p.PROTO_V, "state": "online", "fw": "fake-fleet-0.1",
@@ -113,7 +165,8 @@ class Fleet:
         # Never publish blind. A silently dropped publish looks identical to a
         # dead modem from the app's side, and at fleet scale the drops land on
         # whichever modems happen to be published last.
-        info = self.cl.publish(topic, json.dumps(payload), qos=1, retain=retain)
+        body = payload if isinstance(payload, str) else json.dumps(payload)
+        info = self.cl.publish(topic, body, qos=1, retain=retain)
         if info.rc != mqtt.MQTT_ERR_SUCCESS:
             self.drops[info.rc] = self.drops.get(info.rc, 0) + 1
         return info
@@ -125,6 +178,7 @@ class Fleet:
             self.pub(p.modem_topic(m.mid, "status"), m.status_payload(), True)
             self.pub(p.modem_topic(m.mid, "registry"), m.registry_payload(), True)
             self.pub(p.modem_topic(m.mid, "state"), m.state_payload(), True)
+            self.publish_profiles(m)
             cl.subscribe(p.modem_topic(m.mid, "cmd"), qos=1)
         self.connected.set()
 
@@ -143,7 +197,14 @@ class Fleet:
         cid = cmd.get("id", "?")
         action = cmd.get("action")
         args = cmd.get("args", {}) or {}
-        ok, detail = self.dispatch(m, action, args)
+        res = m.gw.handle(action, args, m.meter_reader(args.get("analyzer", ""))
+                          if action == "profile_test" else None)
+        if res is not None:
+            ok, detail = res
+            if ok:
+                self.publish_profiles(m, m.gw.affected_analyzers())
+        else:
+            ok, detail = self.dispatch(m, action, args)
         print(f"{mid} cmd {cid}: {action} {args} -> {ok} {detail}")
         self.pub(p.modem_topic(mid, "ack"),
                  {"v": p.PROTO_V, "id": cid, "ok": ok, "detail": detail})
@@ -200,25 +261,38 @@ class Fleet:
 
         return False, f"unknown action: {action}"
 
+    def publish_profiles(self, m, analyzers=None):
+        """Retained `profiles` listing, and each (affected) analyzer's `profile`."""
+        self.pub(p.modem_topic(m.mid, "profiles"), m.gw.listing(), True)
+        for aid in (m.gw.analyzers if analyzers is None else analyzers):
+            self.pub(p.analyzer_topic(m.mid, aid, "profile"), m.gw.blob_for(aid), True)
+
     def publish_analyzer(self, m, a):
         m.seq += 1
         drift = hash(a["id"]) % 100 / 10.0
+        prof = m.gw.profile_for(a["id"])
+        read = m.meter_reader(a["id"], time.time(), drift)
+        values, ok_count, _gave_up = m.gw.poll(a["id"], read)
         self.pub(
             p.analyzer_topic(m.mid, a["id"], "telemetry"),
             {"v": p.PROTO_V, "ts": now_iso(), "seq": m.seq, "buffered": False,
-             "meter_ok": True, "values": sim_values(time.time(), drift)},
+             "profile": prof["profile"]["id"], "profile_rev": prof["rev"],
+             "meter_ok": ok_count > 0,
+             "values": {k: (float(v) if v is not None else None) for k, v in values.items()}},
         )
         # Analyzer status is retained and only changes on a link transition.
         # Republishing it every cycle doubled the fleet's message rate for no
         # new information - which matters, because a free public broker will
         # silently throttle a fleet long before it refuses a publish.
         key = (m.mid, a["id"])
-        if self.link_state.get(key) != "online":
-            self.link_state[key] = "online"
+        state = ("online", prof["profile"]["id"])
+        if self.link_state.get(key) != state:
+            self.link_state[key] = state
             self.pub(
                 p.analyzer_topic(m.mid, a["id"], "status"),
                 {"v": p.PROTO_V, "state": "online", "host": a["host"],
-                 "unit": a["unit"], "last_ok": now_iso(), "fail_streak": 0},
+                 "unit": a["unit"], "last_ok": now_iso(), "fail_streak": 0,
+                 "profile": prof["profile"]["id"]},
                 True,
             )
 
@@ -264,6 +338,7 @@ class Fleet:
                                  m.registry_payload(), True)
                         self.pub(p.modem_topic(m.mid, "state"),
                                  m.state_payload(), True)
+                        self.publish_profiles(m)
 
                 if published:
                     drops = (" DROPPED " + str(self.drops)) if self.drops else ""

@@ -14,8 +14,12 @@ sealed interface Route {
     data class ModemEvent(val mid: String) : Route
     data class ModemAck(val mid: String) : Route
     data class ModemLabels(val mid: String) : Route
+    /** Retained listing of the meter profiles a modem has stored. */
+    data class ModemProfiles(val mid: String) : Route
     data class AnalyzerTelemetry(val mid: String, val aid: String) : Route
     data class AnalyzerStatus(val mid: String, val aid: String) : Route
+    /** Retained: the meter profile JSON this analyzer is read with. */
+    data class AnalyzerProfile(val mid: String, val aid: String) : Route
     data object Tree : Route
 
     /** Pre-v2 single-gateway topics. No "v" field, therefore v1 by definition. */
@@ -42,7 +46,9 @@ object TopicRouter {
         "$ROOT/$MODEM/+/state",
         "$ROOT/$MODEM/+/ack",
         "$ROOT/$MODEM/+/labels",
+        "$ROOT/$MODEM/+/profiles",
         "$ROOT/$MODEM/+/$ANALYZER/+/status",
+        "$ROOT/$MODEM/+/$ANALYZER/+/profile",
         TREE,
         "$ROOT/+/telemetry",
         "$ROOT/+/status",
@@ -52,6 +58,7 @@ object TopicRouter {
     fun allModems(leaf: String) = "$ROOT/$MODEM/+/$leaf"
     fun modemAnalyzers(mid: String, leaf: String) = "$ROOT/$MODEM/$mid/$ANALYZER/+/$leaf"
     fun allAnalyzerStatus() = "$ROOT/$MODEM/+/$ANALYZER/+/status"
+    fun allAnalyzerProfiles() = "$ROOT/$MODEM/+/$ANALYZER/+/profile"
     fun legacy(leaf: String) = "$ROOT/+/$leaf"
     fun analyzer(mid: String, aid: String, leaf: String) =
         "$ROOT/$MODEM/$mid/$ANALYZER/$aid/$leaf"
@@ -69,12 +76,14 @@ object TopicRouter {
             "event" -> Route.ModemEvent(s[2])
             "ack" -> Route.ModemAck(s[2])
             "labels" -> Route.ModemLabels(s[2])
+            "profiles" -> Route.ModemProfiles(s[2])
             else -> Route.Unknown(topic)
         }
 
         if (s.size == 6 && s[1] == MODEM && s[3] == ANALYZER) return when (s[5]) {
             "telemetry" -> Route.AnalyzerTelemetry(s[2], s[4])
             "status" -> Route.AnalyzerStatus(s[2], s[4])
+            "profile" -> Route.AnalyzerProfile(s[2], s[4])
             else -> Route.Unknown(topic)
         }
 

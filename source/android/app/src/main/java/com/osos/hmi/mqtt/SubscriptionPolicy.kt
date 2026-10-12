@@ -34,6 +34,10 @@ data class SubscriptionPolicy(
             TopicRouter.allModems("state"),
             TopicRouter.allModems("ack"),
             TopicRouter.allModems("labels"),
+            // Meter profiles: small, retained, rarely change. They say how to label
+            // and group each analyzer's values, so they are held for the whole fleet.
+            TopicRouter.allModems("profiles"),
+            TopicRouter.allAnalyzerProfiles(),
             TopicRouter.TREE,
         )
 

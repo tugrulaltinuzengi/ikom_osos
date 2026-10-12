@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OSOS · Meter map</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <a id="backlink" class="back" href="../index.html" title="Back to the HMI">&larr; HMI</a>
+  <h1>Meter map</h1>
+  <span id="connpill" class="pill">connecting&hellip;</span>
+</header>
+
+<section class="card target">
+  <label>Modem <select id="modemsel"></select></label>
+  <label>Analyzer <select id="analyzersel"></select></label>
+  <div id="targetinfo" class="muted"></div>
+</section>
+
+<nav id="tabs" role="tablist">
+  <button role="tab" data-tab="profile" class="active">Profile</button>
+  <button role="tab" data-tab="import">Import</button>
+  <button role="tab" data-tab="gateway">Gateway</button>
+  <button role="tab" data-tab="live">Live</button>
+</nav>
+
+<main>
+  <!-- ============================================================ PROFILE -->
+  <div id="tab-profile" class="tabpane">
+    <section class="card">
+      <h2>Profile</h2>
+      <div class="row">
+        <select id="libsel" aria-label="Saved profiles"></select>
+        <button id="libnew">New</button>
+        <button id="libdup">Duplicate</button>
+        <button id="libdel" class="danger">Delete</button>
+      </div>
+      <div class="row">
+        <button id="libexport">Export JSON</button>
+        <label class="filebtn">Open JSON&hellip;<input id="libimport" type="file" accept=".json,application/json"></label>
+      </div>
+      <div class="grid2">
+        <label>Name <input id="p-name" maxlength="48" placeholder="Eastron SDM630"></label>
+        <label>Id <input id="p-id" maxlength="24" placeholder="sdm630" spellcheck="false"></label>
+        <label>Vendor <input id="p-vendor" maxlength="48"></label>
+        <label>Model <input id="p-model" maxlength="48"></label>
+        <label>Revision <input id="p-rev" type="number" min="0" max="65535"></label>
+        <label>Transport
+          <select id="p-transport"><option value="tcp">Modbus TCP</option><option value="rtu">Modbus RTU (RS-485)</option></select>
+        </label>
+      </div>
+      <label>Notes <input id="p-notes" maxlength="200"></label>
+    </section>
+
+    <section class="card">
+      <h2>Reading</h2>
+      <div class="grid2">
+        <label>Pause between requests (ms) <input id="t-gap" type="number" min="0" max="2000"></label>
+        <label>Timeout (ms) <input id="t-timeout" type="number" min="50" max="5000"></label>
+        <label>Retries <input id="t-retries" type="number" min="0" max="3"></label>
+        <label>Largest request (registers) <input id="t-block" type="number" min="1" max="64"></label>
+      </div>
+      <label class="check"><input id="t-merge" type="checkbox"> Read neighbouring registers in one request (faster; some meters refuse this)</label>
+      <h3>Defaults for every register</h3>
+      <div class="grid2">
+        <label>Function
+          <select id="d-fc"><option value="3">03 holding registers</option><option value="4">04 input registers</option></select>
+        </label>
+        <label>Type <select id="d-type"></select></label>
+        <label>32/64-bit word order
+          <select id="d-word"><option value="big">high word first (ABCD)</option><option value="little">low word first (CDAB)</option></select>
+        </label>
+        <label>Byte order inside a register
+          <select id="d-byte"><option value="big">normal</option><option value="little">swapped (BADC)</option></select>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Registers <span id="regcount" class="muted"></span></h2>
+      <div class="row">
+        <button id="reg-add">+ Add register</button>
+        <button id="reg-sort">Sort by address</button>
+        <button id="reg-shift">Subtract 1 from addresses</button>
+      </div>
+      <div class="tablewrap"><table id="regtable"></table></div>
+      <p class="muted">A blank Function / Type / Order / Scale cell uses the default above. Value = raw &times; scale + offset.
+        Addresses count from 0 (manual register 40001 is address 0). <b>Test</b> reads one register from the selected analyzer.</p>
+    </section>
+
+    <section class="card">
+      <h2>Tile pages</h2>
+      <p class="muted">What the app shows for this meter, a page at a time.</p>
+      <div id="views"></div>
+      <div class="row"><button id="view-add">+ Add page</button><button id="view-auto">Make pages of 12</button></div>
+    </section>
+
+    <section class="card">
+      <h2>Check</h2>
+      <div id="issues"></div>
+      <div class="row">
+        <button id="save" class="primary">Save to this device</button>
+        <button id="goto-gateway">Send to gateway &rarr;</button>
+      </div>
+      <div id="savemsg" class="muted"></div>
+    </section>
+  </div>
+
+  <!-- ============================================================= IMPORT -->
+  <div id="tab-import" class="tabpane" hidden>
+    <section class="card">
+      <h2>Read a register map from a document</h2>
+      <p class="muted">Word (.docx), Excel (.xlsx), PDF or CSV. The file is read on this device and never uploaded.
+        You review everything before it is used.</p>
+      <div id="drop" class="drop">
+        <label class="filebtn big">Choose a file&hellip;
+          <input id="docfile" type="file" accept=".docx,.xlsx,.pdf,.csv,.tsv,.txt,.doc,.xls">
+        </label>
+        <div class="muted">or drop it here</div>
+      </div>
+      <div id="docstatus" class="muted"></div>
+    </section>
+
+    <section class="card" id="import-review" hidden>
+      <h2>What was found</h2>
+      <div id="docwarnings"></div>
+      <div class="grid2">
+        <label>Addresses in the table
+          <select id="io-base"><option value="auto">as written</option><option value="1">count from 1 (subtract 1)</option></select>
+        </label>
+        <label>32-bit values without a stated type
+          <select id="io-32"><option value="f32">float</option><option value="u32">unsigned integer</option><option value="i32">signed integer</option></select>
+        </label>
+        <label>Function code when the table does not say
+          <select id="io-fc"><option value="">from the document</option><option value="3">03 holding</option><option value="4">04 input</option></select>
+        </label>
+        <label>Word order of 32-bit values
+          <select id="io-word"><option value="">from the document (else ABCD)</option><option value="big">ABCD</option><option value="little">CDAB</option></select>
+        </label>
+      </div>
+      <label class="check"><input id="io-merge" type="checkbox"> Read neighbouring registers together (faster)</label>
+      <div class="row">
+        <button id="io-all">Select all</button><button id="io-none">None</button><button id="io-sure">Only the sure ones</button>
+        <span id="io-count" class="muted"></span>
+      </div>
+      <div class="tablewrap"><table id="drafttable"></table></div>
+      <div class="grid2">
+        <label>Profile name <input id="io-name" maxlength="48"></label>
+        <label>Profile id <input id="io-id" maxlength="24" spellcheck="false"></label>
+      </div>
+      <div class="row">
+        <button id="io-use" class="primary">Use as a new profile</button>
+        <button id="io-append">Add to the current profile</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================ GATEWAY -->
+  <div id="tab-gateway" class="tabpane" hidden>
+    <section class="card">
+      <h2>On this gateway</h2>
+      <div id="gwinfo" class="muted"></div>
+      <div id="gwprofiles"></div>
+      <div class="row"><button id="gw-refresh">Refresh list</button></div>
+    </section>
+
+    <section class="card">
+      <h2>Send the profile in the editor</h2>
+      <div id="sendinfo"></div>
+      <label class="check"><input id="send-assign" type="checkbox" checked> Use it for the selected analyzer afterwards</label>
+      <div class="row">
+        <button id="send" class="primary">Send to gateway</button>
+        <button id="send-cancel" hidden>Cancel</button>
+      </div>
+      <progress id="sendprogress" max="1" value="0" hidden></progress>
+      <div id="sendlog" class="log"></div>
+    </section>
+
+    <section class="card">
+      <h2>Bring it back</h2>
+      <p class="muted">Load the profile the selected analyzer is read with into the editor.</p>
+      <div class="row"><button id="gw-pull">Load into editor</button></div>
+    </section>
+  </div>
+
+  <!-- ================================================================ LIVE -->
+  <div id="tab-live" class="tabpane" hidden>
+    <section class="card">
+      <h2>Live values</h2>
+      <div id="livemeta" class="muted"></div>
+      <div class="viewtabs" id="liveviews"></div>
+      <div class="tiles" id="livetiles"></div>
+    </section>
+  </div>
+</main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="../mqtt.min.js"></script>
+<script src="../config.js"></script>
+<script src="shipped.js"></script>
+<script src="profile.js"></script>
+<script src="topics.js"></script>
+<script src="fleet.js"></script>
+<script src="uploader.js"></script>
+<script src="transport.js"></script>
+<script src="zip.js"></script>
+<script src="docx.js"></script>
+<script src="xlsx.js"></script>
+<script src="pdftext.js"></script>
+<script src="tablemap.js"></script>
+<script src="importer.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

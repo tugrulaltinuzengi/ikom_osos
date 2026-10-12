@@ -7,6 +7,18 @@ Same MQTT contract, completely different path to the meter.
 DKM-440 ──ethernet──▶ LAN ◀──wifi── ESP8266 ──MQTT──▶ broker ──▶ phone
 ```
 
+> **v0.5 — meter profiles.** The register map is no longer compiled in: the DKM-440
+> is the built-in default, other meters are uploaded from the app or browser (Meter
+> map window) and stored in flash. See `../meter-profiles/README.md`. Flash layout:
+> choose one **with a filesystem** (`esp8266:esp8266:nodemcuv2` defaults to 4 MB
+> FS:2 MB, fine); without one the gateway still runs on the built-in DKM-440 but
+> cannot keep uploaded profiles. Host tests: `make -C tests`.
+>
+> Files: `profile_store.h` (storage + upload protocol), `osos_codec.h` and
+> `osos_builtin_dkm440.h` (**synced copies** of `../firmware-common/` — edit those and
+> run `python ../tools/sync_firmware_common.py`), `fs_littlefs.h`, `modbus_tcp.h`
+> (function codes 03/04, per-profile timeout).
+
 ## Why this exists
 
 The DKM-440 turned out to have its own Ethernet port speaking **Modbus TCP on

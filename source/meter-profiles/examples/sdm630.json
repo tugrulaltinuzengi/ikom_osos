@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "id": "sdm630",
+  "name": "Eastron SDM630",
+  "vendor": "Eastron",
+  "model": "SDM630",
+  "notes": "Example. Input registers (FC04), float32, high word first. Verify against your unit's manual.",
+  "rev": 1,
+  "transport": "rtu",
+  "timing": {"read_gap_ms": 20, "timeout_ms": 500, "max_block": 16, "retries": 1},
+  "defaults": {"fc": 4, "type": "f32", "word_order": "big", "byte_order": "big"},
+  "registers": [
+    {"key": "Voltage_L1", "address": 0, "decimals": 2, "unit": "V", "label": "Voltage L1"},
+    {"key": "Voltage_L2", "address": 2, "decimals": 2, "unit": "V", "label": "Voltage L2"},
+    {"key": "Voltage_L3", "address": 4, "decimals": 2, "unit": "V", "label": "Voltage L3"},
+    {"key": "Current_L1", "address": 6, "decimals": 2, "unit": "A", "label": "Current L1"},
+    {"key": "Current_L2", "address": 8, "decimals": 2, "unit": "A", "label": "Current L2"},
+    {"key": "Current_L3", "address": 10, "decimals": 2, "unit": "A", "label": "Current L3"},
+    {"key": "Power_L1", "address": 12, "decimals": 2, "unit": "W", "label": "Power L1"},
+    {"key": "Power_L2", "address": 14, "decimals": 2, "unit": "W", "label": "Power L2"},
+    {"key": "Power_L3", "address": 16, "decimals": 2, "unit": "W", "label": "Power L3"},
+    {"key": "PF_L1", "address": 30, "decimals": 2, "unit": "", "label": "PF L1"},
+    {"key": "PF_L2", "address": 32, "decimals": 2, "unit": "", "label": "PF L2"},
+    {"key": "PF_L3", "address": 34, "decimals": 2, "unit": "", "label": "PF L3"},
+    {"key": "Power_Total", "address": 52, "decimals": 2, "unit": "W", "label": "Power total"},
+    {"key": "Freq", "address": 70, "decimals": 2, "unit": "Hz", "label": "Frequency"},
+    {"key": "Energy_Import", "address": 72, "decimals": 2, "unit": "kWh", "label": "Import energy"},
+    {"key": "Energy_Export", "address": 74, "decimals": 2, "unit": "kWh", "label": "Export energy"}
+  ],
+  "views": [
+    {"id": "overview", "label": "overview", "keys": ["Voltage_L1", "Voltage_L2", "Voltage_L3", "Current_L1", "Current_L2", "Current_L3", "Power_Total", "Freq"]},
+    {"id": "power", "label": "power", "keys": ["Power_L1", "Power_L2", "Power_L3", "Power_Total", "PF_L1", "PF_L2", "PF_L3"]},
+    {"id": "energy", "label": "energy", "keys": ["Energy_Import", "Energy_Export"]}
+  ]
+}

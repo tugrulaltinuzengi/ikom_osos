@@ -33,10 +33,12 @@ import androidx.compose.ui.unit.dp
 import com.osos.hmi.AppContainer
 import com.osos.hmi.data.TelemetryHistory
 import com.osos.hmi.model.AnalyzerKey
+import com.osos.hmi.model.MeterProfile
 import com.osos.hmi.model.MonitorLevel
-import com.osos.hmi.model.VIEWS
-import com.osos.hmi.model.shortName
+import com.osos.hmi.model.decimalsFor
+import com.osos.hmi.model.labelFor
 import com.osos.hmi.model.unitFor
+import com.osos.hmi.model.viewMap
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -67,7 +69,12 @@ fun MonitorScreen(c: AppContainer) {
 fun AnalyzerDetailScreen(c: AppContainer, who: AnalyzerKey, onBack: () -> Unit) {
     val fleet by c.fleet.collectAsState()
     val t = fleet.analyzer(who.mid, who.aid)?.latest
-    val view by c.uiMonitorView.collectAsState()
+    // How this meter's values are named and grouped comes from the profile its
+    // gateway published; without one the DKM-440 pages apply, as they always did.
+    val profile = fleet.analyzer(who.mid, who.aid)?.profile
+    val pages = viewMap(profile)
+    val requestedView by c.uiMonitorView.collectAsState()
+    val view = if (requestedView in pages) requestedView else pages.keys.first()
     val historyVersion by c.history.version.collectAsState()
     val logs by c.logEntries.collectAsState()
     var sparkKey by remember { mutableStateOf<String?>(null) }
@@ -96,7 +103,7 @@ fun AnalyzerDetailScreen(c: AppContainer, who: AnalyzerKey, onBack: () -> Unit) 
         // Scrollable, not fixed: a fixed row splits ~344 dp across five tabs
         // and "overview" breaks mid-word. Here every label keeps one line and
         // the row scrolls to whichever tab is selected (draw pad included).
-        val viewKeys = VIEWS.keys.toList()
+        val viewKeys = pages.keys.toList()
         ScrollableTabRow(
             selectedTabIndex = viewKeys.indexOf(view).coerceAtLeast(0),
             edgePadding = 8.dp,
@@ -124,11 +131,12 @@ fun AnalyzerDetailScreen(c: AppContainer, who: AnalyzerKey, onBack: () -> Unit) 
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item { Spacer(Modifier.height(2.dp)) }
-            items(VIEWS[view].orEmpty().chunked(2)) { pair ->
+            items(pages[view].orEmpty().chunked(2)) { pair ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     pair.forEach { key ->
                         Tile(
                             key = key,
+                            profile = profile,
                             value = t?.values?.get(key),
                             selected = sparkKey == key,
                             modifier = Modifier
@@ -140,7 +148,7 @@ fun AnalyzerDetailScreen(c: AppContainer, who: AnalyzerKey, onBack: () -> Unit) 
                 }
             }
             sparkKey?.let { key ->
-                item { SparklineCard(who, key, c.history, historyVersion) }
+                item { SparklineCard(who, key, profile, c.history, historyVersion) }
             }
             item {
                 Text(
@@ -163,23 +171,29 @@ fun AnalyzerDetailScreen(c: AppContainer, who: AnalyzerKey, onBack: () -> Unit) 
 }
 
 @Composable
-private fun Tile(key: String, value: Double?, selected: Boolean, modifier: Modifier = Modifier) {
+private fun Tile(
+    key: String,
+    profile: MeterProfile?,
+    value: Double?,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+) {
     Card(modifier) {
         Column(Modifier.padding(10.dp)) {
             Text(
-                shortName(key),
+                labelFor(profile, key),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             )
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
-                    value?.let { "%.2f".format(it) } ?: "—",
+                    value?.let { "%.${decimalsFor(profile, key)}f".format(it) } ?: "—",
                     style = MaterialTheme.typography.titleLarge,
                     color = if (value == null) MaterialTheme.colorScheme.error
                     else if (selected) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurface,
                 )
-                val unit = unitFor(key)
+                val unit = unitFor(profile, key)
                 if (unit.isNotEmpty()) {
                     Text(
                         " $unit",
@@ -196,6 +210,7 @@ private fun Tile(key: String, value: Double?, selected: Boolean, modifier: Modif
 private fun SparklineCard(
     who: AnalyzerKey,
     key: String,
+    profile: MeterProfile?,
     history: TelemetryHistory,
     version: Int,
 ) {
@@ -205,7 +220,7 @@ private fun SparklineCard(
             val mn = series.minOfOrNull { it.second }
             val mx = series.maxOfOrNull { it.second }
             Text(
-                "${shortName(key)} — ${series.size} pts" +
+                "${labelFor(profile, key)} — ${series.size} pts" +
                     (if (mn != null && mx != null) " · min %.2f · max %.2f".format(mn, mx) else ""),
                 style = MaterialTheme.typography.labelSmall,
             )

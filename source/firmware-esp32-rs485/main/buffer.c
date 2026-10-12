@@ -31,3 +31,8 @@ int buf_count(void)
 {
     return s_count;
 }
+
+void buf_clear(void)
+{
+    s_count = 0;
+}

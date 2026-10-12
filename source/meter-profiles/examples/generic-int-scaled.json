@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "id": "generic-int",
+  "name": "Generic integer meter",
+  "notes": "Illustration only, not a real device: 16-bit tenths, signed values, a 32-bit counter.",
+  "rev": 1,
+  "transport": "rtu",
+  "timing": {"read_gap_ms": 50, "timeout_ms": 800, "max_block": 8, "retries": 1},
+  "defaults": {"fc": 3, "type": "u16"},
+  "registers": [
+    {"key": "Voltage", "address": 0, "scale": 0.1, "decimals": 1, "unit": "V", "label": "Voltage"},
+    {"key": "Current", "address": 1, "scale": 0.01, "decimals": 2, "unit": "A", "label": "Current"},
+    {"key": "Power", "address": 2, "type": "i16", "unit": "W", "label": "Active power"},
+    {"key": "Temperature", "address": 3, "type": "i16", "scale": 0.1, "offset": -40, "decimals": 1, "unit": "C", "label": "Temperature"},
+    {"key": "Energy", "address": 4, "type": "u32", "word_order": "little", "scale": 0.01, "decimals": 2, "unit": "kWh", "label": "Energy"}
+  ],
+  "views": [
+    {"id": "overview", "label": "overview", "keys": ["Voltage", "Current", "Power", "Temperature", "Energy"]}
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "id": "dkm440",
+  "name": "DATAKOM DKM-440",
+  "vendor": "Datakom",
+  "model": "DKM-440",
+  "notes": "TEDAS MLZ/2017-063 table 2. float32 over 2 holding registers, FC03, high word first.",
+  "rev": 1,
+  "transport": "tcp",
+  "timing": {"read_gap_ms": 30, "timeout_ms": 500, "max_block": 1, "retries": 0},
+  "defaults": {"fc": 3, "type": "f32", "word_order": "big", "byte_order": "big", "scale": 1, "offset": 0},
+  "registers": [
+    {"key": "Supply_Voltage", "address": 260, "decimals": 3, "unit": "V", "label": "Supply Voltage"},
+    {"key": "MainBus_Voltage_L1", "address": 100, "decimals": 3, "unit": "V", "label": "Voltage L1"},
+    {"key": "MainBus_Voltage_L2", "address": 102, "decimals": 3, "unit": "V", "label": "Voltage L2"},
+    {"key": "MainBus_Voltage_L3", "address": 104, "decimals": 3, "unit": "V", "label": "Voltage L3"},
+    {"key": "MainBus_Voltage_N", "address": 106, "decimals": 3, "unit": "V", "label": "Voltage N"},
+    {"key": "MainBus_Current_L1", "address": 180, "decimals": 3, "unit": "A", "label": "Current L1"},
+    {"key": "MainBus_Current_L2", "address": 182, "decimals": 3, "unit": "A", "label": "Current L2"},
+    {"key": "MainBus_Current_L3", "address": 184, "decimals": 3, "unit": "A", "label": "Current L3"},
+    {"key": "MainBus_Current_N", "address": 258, "decimals": 3, "unit": "A", "label": "Current N"},
+    {"key": "MainBus_Freq_L1", "address": 266, "decimals": 3, "unit": "Hz", "label": "Freq L1"},
+    {"key": "MainBus_Freq_L2", "address": 268, "decimals": 3, "unit": "Hz", "label": "Freq L2"},
+    {"key": "MainBus_Freq_L3", "address": 270, "decimals": 3, "unit": "Hz", "label": "Freq L3"},
+    {"key": "MainBus_PF_L1", "address": 272, "decimals": 3, "label": "PF L1"},
+    {"key": "MainBus_PF_L2", "address": 274, "decimals": 3, "label": "PF L2"},
+    {"key": "MainBus_PF_L3", "address": 276, "decimals": 3, "label": "PF L3"},
+    {"key": "MainBus_CosPhi_L1", "address": 350, "decimals": 3, "label": "CosPhi L1"},
+    {"key": "MainBus_CosPhi_L2", "address": 352, "decimals": 3, "label": "CosPhi L2"},
+    {"key": "MainBus_CosPhi_L3", "address": 354, "decimals": 3, "label": "CosPhi L3"},
+    {"key": "MainBus_TanPhi_Tot", "address": 428, "decimals": 3, "label": "TanPhi Tot"},
+    {"key": "MainBus_TanPhi_L1", "address": 430, "decimals": 3, "label": "TanPhi L1"},
+    {"key": "MainBus_TanPhi_L2", "address": 432, "decimals": 3, "label": "TanPhi L2"},
+    {"key": "MainBus_TanPhi_L3", "address": 434, "decimals": 3, "label": "TanPhi L3"}
+  ],
+  "views": [
+    {"id": "overview", "label": "overview", "keys": ["MainBus_Voltage_L1", "MainBus_Voltage_L2", "MainBus_Voltage_L3", "MainBus_Current_L1", "MainBus_Current_L2", "MainBus_Current_L3", "MainBus_Freq_L1", "Supply_Voltage", "MainBus_Voltage_N", "MainBus_Current_N"]},
+    {"id": "L1", "label": "L1", "keys": ["MainBus_Voltage_L1", "MainBus_Current_L1", "MainBus_Freq_L1", "MainBus_PF_L1", "MainBus_CosPhi_L1", "MainBus_TanPhi_L1"]},
+    {"id": "L2", "label": "L2", "keys": ["MainBus_Voltage_L2", "MainBus_Current_L2", "MainBus_Freq_L2", "MainBus_PF_L2", "MainBus_CosPhi_L2", "MainBus_TanPhi_L2"]},
+    {"id": "L3", "label": "L3", "keys": ["MainBus_Voltage_L3", "MainBus_Current_L3", "MainBus_Freq_L3", "MainBus_PF_L3", "MainBus_CosPhi_L3", "MainBus_TanPhi_L3"]},
+    {"id": "power", "label": "power", "keys": ["MainBus_PF_L1", "MainBus_PF_L2", "MainBus_PF_L3", "MainBus_CosPhi_L1", "MainBus_CosPhi_L2", "MainBus_CosPhi_L3", "MainBus_TanPhi_Tot", "MainBus_TanPhi_L1", "MainBus_TanPhi_L2", "MainBus_TanPhi_L3"]}
+  ]
+}

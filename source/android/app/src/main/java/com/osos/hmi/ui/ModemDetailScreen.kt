@@ -61,6 +61,11 @@ fun ModemDetailScreen(c: AppContainer, mid: String, onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(16.dp))
+        // How this gateway reads its meters: register map, types, scaling. Read from a
+        // manual (Word/PDF/Excel/CSV) or edited by hand, then sent to the gateway.
+        OutlinedButton(onClick = { c.meterMapOpen.value = true }) { Text("Meter map…") }
+
+        Spacer(Modifier.height(16.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Sleep", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.weight(1f))
